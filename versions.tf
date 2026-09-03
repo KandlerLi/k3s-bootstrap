@@ -10,7 +10,7 @@ terraform {
 
   backend "s3" {
     bucket       = "jkandler-terraform-state"
-    key          = "k3s-apps-bootstrap/terraform.tfstate"
+    key          = "k3s-bootstrap/terraform.tfstate"
     region       = "eu-central-1"
     encrypt      = true
     use_lockfile = true
