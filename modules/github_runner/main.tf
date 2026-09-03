@@ -1,0 +1,489 @@
+# Phase B of moving github_runner to k3s (see the approved plan in
+# home-infra's own plan history): one Deployment per repository in
+# var.github_runner_repositories, via for_each -- the first use of
+# for_each in this module (originally written alongside 8 sibling
+# "one module per distinct service" app modules in infra/k3s-apps,
+# before this module and its own root were extracted into this
+# standalone repo, 2026-09-03; this is a data-driven multiplication of
+# *one* service instead, so it earned the exception rather than
+# following that convention).
+#
+# Also the first use of node_selector/toleration anywhere in infra/
+# k3s-apps (or home-infra), at the time -- every Deployment here is
+# pinned to k3s-node-2 and
+# tolerates its ci=github-runner:NoSchedule taint, the second, tainted
+# k3s node ansible/roles/k3s_node now supports specifically so CI
+# workloads never compete with, or endanger, anything on k3s-node-1.
+#
+# Docker access: a privileged docker:dind sidecar per Pod, not
+# kaniko/rootless building -- a deliberate, accepted trade-off (see the
+# plan): every repository's existing `docker build`/`docker run`
+# workflow steps keep working completely unmodified, at the real cost
+# that a privileged container can escape to its own node. Contained to
+# k3s-node-2 alone, which runs nothing else. Reached over a shared
+# Unix socket volume (`/var/run/docker.sock`, an emptyDir mounted at
+# the identical path in both containers), not TCP -- confirmed live
+# that docker:dind's own entrypoint never actually opens a TCP
+# listener just because DOCKER_TLS_CERTDIR="" is set (that only skips
+# TLS cert generation); the socket is the only thing it ever binds,
+# matching the officially-documented host-socket pattern, just shared
+# between two containers in one Pod instead of between a container and
+# its host.
+#
+# Confirmed live and fixed: any job step using GitHub Actions' own
+# `container:` job option (every repository's own Validate job, home-
+# infra's own checks.yml included) failed with "stat /__e/node24/bin/
+# node: no such file or directory" -- actions/runner bind-mounts its
+# own /actions-runner/externals (the Node.js runtime for JS-based
+# actions) and /_work into the job containers it asks Docker to start,
+# and Docker resolves a bind-mount's *source* path against the
+# *daemon's* own filesystem, not the client's. With the daemon living
+# in a separate dind container, those paths simply didn't exist there.
+# Same root cause the image's own upstream docs call out for the
+# host-socket case ("this path needs to be the same path on host and
+# inside the container") -- just not documented for a separate-sidecar
+# dind setup at all. Fixed by sharing both directories as real
+# volumes, mounted at the identical absolute path in both containers,
+# so the daemon's own filesystem view actually has the files being
+# bind-mounted. /actions-runner is baked into the runner image's own
+# layer (not empty at start), so a plain empty_dir mounted there would
+# shadow the real install -- seeded first by a same-image init
+# container instead, the same "seed a volume from image content before
+# the real container mounts shift it" shape infra/k3s-apps' own
+# modules/deluge's own seed-web-conf init container already
+# established.
+#
+# Confirmed live and fixed: a `container:` job step still got EACCES
+# writing into the shared "work" volume even after the bind-mount fix
+# above. Root cause is one level deeper than this Pod's own internal
+# identity: GitHub Actions' own workflow shape here captures id -u/
+# id -g from the "Build CI image" job and passes it as `container:
+# options: --user <uid>:<gid>` to the separate "Validate" job -- true
+# by construction on the old VM (one shared filesystem, one real
+# account), no longer guaranteed once this module's own runners pool
+# additively alongside it: confirmed live, a run where "Build CI
+# image" executed on the *old* VM (capturing its own real ghr-<id>
+# system account's uid) while "Validate" landed on this module's own
+# runner, asking to write as a uid that means nothing here.
+#
+# First fix tried: a dedicated permission-fixer container polling
+# `chmod -R 0777 /work`, on the theory that no fix on this Pod's own
+# side can predict or match an arbitrary incoming uid, so keep the
+# whole tree permissive instead. It worked for the original bug, but
+# turned out actively harmful, not just an unnecessary belt-and-
+# suspenders: confirmed live, it fought home-infra's own checks.yml,
+# which deliberately `chmod o-w`s its own checked-out workspace as a
+# real security measure (Ansible refuses to load an ansible.cfg from a
+# world-writable directory) -- this loop kept re-adding world-write
+# permissions moments later, breaking that repository's own CI outright
+# once its runner moved here. Removed. Fixed at the actual source
+# instead: the runner container's own `umask 000` (see its comment)
+# means anything *this Pod's own process tree* creates is 0777 from
+# the instant of creation, with no race to poll for and nothing to
+# retroactively widen -- confirmed live, a real checkout succeeded
+# cleanly with this alone, no fixer container involved.
+#
+# Known, accepted, bounded limitation: the fixes above cover a
+# `container:` job step *writing* into the shared work volume, but not
+# every possible interaction of the cross-machine uid handoff --
+# confirmed live, a workflow run where "Build CI image" executed on
+# the old VM and "Validate" landed here still occasionally fails a
+# later `chmod -R a+rwX "$GITHUB_WORKSPACE"` cleanup step with EPERM,
+# even though this Pod's own runner container is root with CAP_FOWNER
+# confirmed present (a synthetic touch+chown+chmod reproduction of the
+# same shape succeeds cleanly, so the exact mechanism wasn't fully
+# root-caused). When both jobs land on the *same* runner instead --
+# old+old, or confirmed live, new+new -- every step succeeds, cleanup
+# included. This only ever happens during Phase C's additive rollout,
+# while both an old-VM and a new-k3s runner share the same labels and
+# GitHub can freely mix which one executes which job within one
+# workflow run; it disappears entirely and permanently once Phase D
+# retires the old VM, leaving only internally-consistent runners. A
+# re-run picks a different runner pairing and normally succeeds.
+# Accepted deliberately rather than chased further, given the real,
+# steep diminishing returns already hit digging into it.
+#
+# Runner image: the community myoung34/github-runner image, not a
+# hand-rolled entrypoint -- its own registration/deregistration logic
+# (on container start/stop) replaces the drift/busy-safety Ansible
+# asserts in home-infra's configure_repository.yml, which exist
+# specifically because that's a *persistent* systemd service Ansible
+# reapplies idempotently; a Kubernetes Deployment restarting a Pod
+# doesn't have that problem. debian-trixie variant, matching every
+# other Debian image pinned elsewhere in this project.
+#
+# Resources: not yet measured from real usage (first deploy) -- sized
+# off the old VM's own proven real-world capacity instead of a guess:
+# it already runs all of today's repositories as systemd processes on
+# the same 2 vCPU/2048Mi budget k3s-node-2 itself has. Burstable
+# (requests small, limits generous) since jobs are occasional/bursty,
+# not constantly running -- revisit against real usage once live,
+# matching this project's own measure-then-size discipline everywhere
+# else there's already real data to size from.
+
+locals {
+  github_runner_repositories_by_id = {
+    for repo in var.github_runner_repositories : repo.id => merge(repo, {
+      service_account_name = try(var.github_runner_service_accounts[repo.id], null)
+    })
+  }
+}
+
+# Confirmed live (2026-08-31): a `container:` job's own OIDC credential
+# step (aws-actions/configure-aws-credentials) hung for exactly ~90s
+# (its own configured action-timeout-s) on its first request, 100%
+# reproducible across multiple Pods, then succeeded near-instantly on
+# retry -- a path-MTU black hole, not flakiness. Caught it directly via
+# a live tcpdump capture during an actual stall: the server sends its
+# response fragmented, the client's own kernel SACKs receiving bytes
+# 2849:5178 while never receiving bytes 1:2849 at all, and then dead
+# silence for the rest of the timeout window -- not one retransmission
+# attempt ever arrives. Root cause: the Pod's own eth0 (flannel's VXLAN
+# overlay, which correctly accounts for encapsulation overhead) sits at
+# MTU 1450, but dind's own *inner* Docker-in-Docker bridge networks --
+# where every `container:` job step actually runs -- were still at
+# Docker's own untouched default of 1500, with no way to know about the
+# outer network's lower ceiling.
+#
+# A first attempt at this fix used only daemon.json's own "mtu" key --
+# confirmed live via the same tcpdump technique that this was
+# insufficient: it only changes the *default* bridge network (docker0),
+# and GitHub's own runner creates a fresh custom network per job
+# (confirmed in dind's own logs: "github_network_<hash>"), which never
+# inherits that default at all -- confirmed live via a repeat capture
+# that the job container's own SYN still advertised mss 1460 (the
+# untouched MTU-1500 value) even after the first fix was live.
+# "default-network-opts" is Docker's own documented mechanism for
+# exactly this gap: it sets the default driver options -- including
+# mtu -- for every bridge network the daemon creates from then on,
+# custom ones included, without needing each `docker network create`
+# call to pass its own --opt (which isn't ours to control here; the
+# runner's own internals issue those calls). A daemon.json file, not a
+# --mtu command/args override -- dockerd reads this automatically
+# regardless of how it's invoked, so this doesn't need to touch (or
+# risk diverging from) the image's own default entrypoint/CMD the way
+# overriding command/args would.
+resource "kubernetes_config_map_v1" "github_runner_dind_daemon_config" {
+  metadata {
+    name = "github-runner-dind-daemon-config"
+  }
+
+  data = {
+    "daemon.json" = jsonencode({
+      mtu = 1450
+      default-network-opts = {
+        bridge = {
+          "com.docker.network.driver.mtu" = "1450"
+        }
+      }
+    })
+  }
+}
+
+resource "kubernetes_deployment_v1" "github_runner" {
+  for_each = local.github_runner_repositories_by_id
+
+  metadata {
+    name = "github-runner-${each.key}"
+  }
+
+  spec {
+    replicas = 1
+
+    selector {
+      match_labels = {
+        app = "github-runner-${each.key}"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = "github-runner-${each.key}"
+        }
+      }
+
+      spec {
+        # Every repo except one gets the old behaviour: neither
+        # container talks to the Kubernetes API at all. k3s-apps' own
+        # entry gets a real ServiceAccount name via
+        # var.github_runner_service_accounts (see variables.tf), which
+        # flips this on and mounts that ServiceAccount's token into
+        # every container in the Pod -- including the "runner"
+        # container itself, so a job step with no container: key (see
+        # k3s-apps' own checks.yml/apply.yml) sees it automatically,
+        # the same way any in-cluster process would.
+        automount_service_account_token = each.value.service_account_name != null
+        service_account_name            = each.value.service_account_name
+
+        node_selector = {
+          "kubernetes.io/hostname" = "k3s-node-2"
+        }
+
+        toleration {
+          key      = "ci"
+          operator = "Equal"
+          value    = "github-runner"
+          effect   = "NoSchedule"
+        }
+
+        # Seeds the shared actions-runner-install volume from this same
+        # image's own baked-in /actions-runner before either main
+        # container starts -- see the header comment above for why this
+        # needs to be real, shared, non-empty content rather than a
+        # plain empty_dir mounted straight over the image's own install.
+        init_container {
+          name    = "seed-runner-install"
+          image   = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
+          command = ["sh", "-c", "cp -a /actions-runner/. /actions-runner-shared/"]
+
+          volume_mount {
+            name       = "actions-runner-install"
+            mount_path = "/actions-runner-shared"
+          }
+        }
+
+        container {
+          name  = "runner"
+          image = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
+
+          # An earlier fix here was a separate container polling `chmod
+          # -R 0777 /work` -- it genuinely worked (later inspection
+          # always found /work fully 0777), but lost a real race
+          # (actions/checkout writes into a freshly mkdir'd
+          # _temp/_runner_file_commands/ faster than even a fast poll
+          # interval can reliably catch) and, worse, confirmed live to
+          # actively fight home-infra's own checks.yml security check
+          # (see this file's own header comment). Removed. Fixing the
+          # umask this container's own process tree inherits solves the
+          # same problem at the actual source instead of polling for
+          # it: anything created from here on is 0777 from the instant
+          # of creation, no race, nothing to retroactively widen or
+          # fight a later legitimate `chmod` over. Minimal override --
+          # same ENTRYPOINT (/entrypoint.sh) and CMD (Dockerfile's own
+          # ./bin/Runner.Listener run --startuptype service, passed
+          # through as args below) as the image's own default, so
+          # entrypoint.sh's own setup logic runs completely unchanged;
+          # only the umask ahead of its exec differs.
+          command = ["sh", "-c", "umask 000 && exec /entrypoint.sh \"$@\"", "sh"]
+          args    = ["./bin/Runner.Listener", "run", "--startuptype", "service"]
+
+          env {
+            name = "ACCESS_TOKEN"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret_v1.github_runner_token.metadata[0].name
+                key  = "token"
+              }
+            }
+          }
+          env {
+            name  = "REPO_URL"
+            value = "https://github.com/${var.github_runner_owner}/${each.value.repository}"
+          }
+          env {
+            name  = "RUNNER_SCOPE"
+            value = "repo"
+          }
+          # k3s-node-2-<id>, not <id> alone -- distinct from the old VM's
+          # own github-runner-<id> names so both can register and serve
+          # side by side during the additive rollout (Phase C), and so
+          # it's obvious from GitHub's own runner list which one picked
+          # up a given job.
+          env {
+            name  = "RUNNER_NAME"
+            value = "k3s-node-2-${each.key}"
+          }
+          # Matches today's real labels exactly, so every repository's
+          # existing runs-on: [self-hosted, home, debian] selector keeps
+          # working unmodified -- this is what makes the rollout
+          # additive rather than requiring a workflow-file change per
+          # repository.
+          env {
+            name  = "LABELS"
+            value = "home,debian,x64"
+          }
+          # Ephemeral, deliberately -- one job per Pod, then it exits
+          # and the Deployment restarts it fresh for the next. Confirmed
+          # live: the entrypoint's own EPHEMERAL check is `[ -n
+          # "${EPHEMERAL}" ]`, true for ANY set value including
+          # "false" -- there's no way to opt out of ephemeral mode by
+          # setting this to a falsy string, only by leaving it unset
+          # entirely, so it's set to "true" here to make the real,
+          # already-live behavior explicit rather than accidental. A
+          # deliberate departure from the old VM-based role's own
+          # persistent-systemd-service shape: ephemeral is GitHub's own
+          # recommended pattern for container/k8s-hosted runners, and it
+          # sidesteps the whole class of cross-job workspace-reuse bug
+          # that role needs real Ansible logic to handle (root-owned
+          # leftover files from a containerized job step blocking a
+          # later job's own checkout) -- every Pod starts clean.
+          env {
+            name  = "EPHEMERAL"
+            value = "true"
+          }
+          # The image itself should be bumped to update the runner
+          # binary, not have it silently self-update inside a running
+          # container -- same reasoning as the old role's own
+          # --disableupdate config.sh flag.
+          env {
+            name  = "DISABLE_AUTO_UPDATE"
+            value = "true"
+          }
+          # This image can also start its own embedded dockerd -- never
+          # here, the dind sidecar below owns that entirely.
+          env {
+            name  = "START_DOCKER_SERVICE"
+            value = "false"
+          }
+          # Keeps this container's own Runner.Listener process as uid 0
+          # rather than gosu-ing to an internal non-root account -- one
+          # less source of identity mismatch for the case where a
+          # workflow's own jobs all land on this same Pod (see this
+          # file's own header comment for the known, accepted, bounded
+          # limitation when they don't).
+          env {
+            name  = "RUN_AS_ROOT"
+            value = "true"
+          }
+          # The shared socket volume below, not TCP -- see this file's
+          # own header comment for why.
+          env {
+            name  = "DOCKER_HOST"
+            value = "unix:///var/run/docker.sock"
+          }
+          # A plain, explicit path rather than this image's own
+          # /_work/<runner-name> default -- both containers mount the
+          # shared "work" volume at this exact path (see the header
+          # comment on why it has to be identical on both sides).
+          env {
+            name  = "RUNNER_WORKDIR"
+            value = "/work"
+          }
+
+          # No read_only_root_filesystem/non-root here (unlike most
+          # other modules' containers) -- this container's filesystem is
+          # the real CI job's own working directory; checkout, package
+          # installs, and arbitrary workflow steps all need to write to
+          # it, the same reason home-infra's own per-repo service
+          # accounts were never given a restricted shell either.
+          resources {
+            requests = {
+              cpu    = "10m"
+              memory = "64Mi"
+            }
+            limits = {
+              cpu    = "200m"
+              memory = "256Mi"
+            }
+          }
+
+          volume_mount {
+            name       = "actions-runner-install"
+            mount_path = "/actions-runner"
+          }
+          volume_mount {
+            name       = "work"
+            mount_path = "/work"
+          }
+          volume_mount {
+            name       = "docker-socket"
+            mount_path = "/var/run"
+          }
+        }
+
+        container {
+          name  = "dind"
+          image = "docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07"
+
+          env {
+            name  = "DOCKER_TLS_CERTDIR"
+            value = ""
+          }
+
+          security_context {
+            privileged = true
+          }
+
+          resources {
+            requests = {
+              cpu    = "50m"
+              memory = "128Mi"
+            }
+            limits = {
+              cpu    = "1000m"
+              memory = "768Mi"
+            }
+          }
+
+          # Avoids overlayfs-on-overlayfs (this container's own writable
+          # layer already is one) for everything a real docker build
+          # actually writes -- a plain emptyDir, not a PVC: build cache
+          # losing itself on a Pod restart is a performance hit, not
+          # data loss, the same "starting fresh is low-stakes" reasoning
+          # modules/alertmanager's own no-PVC decision used.
+          volume_mount {
+            name       = "docker-data"
+            mount_path = "/var/lib/docker"
+          }
+          # Same two paths, same absolute mount points as the runner
+          # container above -- this is what actually fixes the
+          # container: job bind-mount failure: the daemon (this
+          # container) now has the real files at the paths it's asked
+          # to bind-mount from.
+          volume_mount {
+            name       = "actions-runner-install"
+            mount_path = "/actions-runner"
+          }
+          volume_mount {
+            name       = "work"
+            mount_path = "/work"
+          }
+          # dockerd creates docker.sock here on startup -- shared with
+          # the runner container above so it can reach it at the exact
+          # same path, unix sockets aren't network-addressable.
+          volume_mount {
+            name       = "docker-socket"
+            mount_path = "/var/run"
+          }
+          # See this file's own header comment on
+          # kubernetes_config_map_v1.github_runner_dind_daemon_config
+          # for why this exists: without it, this daemon's own internal
+          # bridge networks default to MTU 1500, silently black-holing
+          # any container: job step's own outbound HTTPS response
+          # bodies once they cross into this Pod's real MTU-1450
+          # network.
+          volume_mount {
+            name       = "dind-daemon-config"
+            mount_path = "/etc/docker/daemon.json"
+            sub_path   = "daemon.json"
+            read_only  = true
+          }
+        }
+
+        volume {
+          name = "docker-data"
+          empty_dir {}
+        }
+        volume {
+          name = "actions-runner-install"
+          empty_dir {}
+        }
+        volume {
+          name = "work"
+          empty_dir {}
+        }
+        volume {
+          name = "docker-socket"
+          empty_dir {}
+        }
+        volume {
+          name = "dind-daemon-config"
+          config_map {
+            name = kubernetes_config_map_v1.github_runner_dind_daemon_config.metadata[0].name
+          }
+        }
+      }
+    }
+  }
+}
