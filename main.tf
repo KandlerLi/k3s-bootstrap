@@ -5,8 +5,11 @@
 # kubeconfig -- see README.md. Originally a second Terraform root
 # nested inside infra/k3s-apps itself; extracted into this standalone
 # repo (2026-09-03) to actually live alongside its real siblings
-# (repo-infra, terraform-state) instead of inside the repo it grants
-# access to. Everything else that repo manages (Blocky, ingress,
+# (repo-infra, terraform-state, both bootstrap-category roots at the
+# time) instead of inside the repo it grants access to -- repo-infra
+# has since moved out to its own github/ directory (2026-09-05),
+# leaving terraform-state as this repo's literal filesystem sibling.
+# Everything else that repo manages (Blocky, ingress,
 # Grafana, home-agent, deluge, open-webui, landing-page, alertmanager)
 # lives in infra/k3s-apps' own repo root instead, applied via CI with
 # the narrowly-scoped ServiceAccount defined below.

@@ -23,7 +23,7 @@ variable "github_runner_owner" {
 
 variable "github_runner_repositories" {
   description = <<-EOT
-    One Deployment per entry. Generated from bootstrap/repo-infra's own
+    One Deployment per entry. Generated from github/repo-infra's own
     config.yml (every repository with `runner: true`) by home-infra's
     scripts/sync_github_runner_repositories.py, into this repo's own
     repositories.auto.tfvars.json -- Terraform auto-loads that file, so
