@@ -1,21 +1,27 @@
 # k3s Bootstrap
 
 The k3s cluster's own bootstrap root: the self-hosted GitHub Actions
-runner itself (`modules/github_runner`) plus the three cluster-scoped
+runner itself (`modules/github_runner`), the three cluster-scoped
 `kubernetes_persistent_volume_v1` resources a namespace-scoped Role can
 never be granted `create` on by name (Kubernetes RBAC's `resourceNames`
-only constrains `get`/`update`/`delete` on *existing* objects). Rare
-changes, applied locally with the k3s node's own cluster-admin
-kubeconfig — never CI, same category as `repo-infra`/`terraform-state`.
+only constrains `get`/`update`/`delete` on *existing* objects), and the
+Kubernetes Dashboard's own RBAC (`dashboard_rbac.tf`) for the same
+underlying reason in a different shape: granting RBAC is itself
+privilege-defining, so a CI-applied ServiceAccount can never be trusted
+to create its own ServiceAccounts, Roles, or (Cluster)RoleBindings
+without being able to grant itself arbitrary privilege. Rare changes,
+applied locally with the k3s node's own cluster-admin kubeconfig —
+never CI, same category as `repo-infra`/`terraform-state`.
 
 Originally a second Terraform root nested inside `infra/k3s-apps` itself
 (that repo's own `bootstrap/` subdirectory); extracted into this
 standalone repo (2026-09-03) to actually live alongside its real
 siblings under `bootstrap/`, not inside the repo it grants access to.
 Everything `infra/k3s-apps` actually runs day to day (Blocky, ingress,
-Grafana, home-agent, deluge, open-webui, landing-page, alertmanager)
-lives in that repo's own root instead, applied via CI using the
-`k3s-apps-ci` ServiceAccount this repo creates (`main.tf`).
+Grafana, home-agent, deluge, open-webui, landing-page, alertmanager,
+kubernetes-dashboard) lives in that repo's own root instead, applied
+via CI using the `k3s-apps-ci` ServiceAccount this repo creates
+(`main.tf`).
 
 ## Prerequisites
 
