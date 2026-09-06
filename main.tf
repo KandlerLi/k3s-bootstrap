@@ -65,6 +65,17 @@ resource "kubernetes_role_v1" "k3s_apps_ci" {
     resources  = ["ingresses"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
+  # Added 2026-09-06 for modules/sankey_export's kubernetes_cron_job_v1 --
+  # the first CronJob-shaped module in that repo, so this API group was
+  # never granted before. Only cronjobs itself: Terraform only ever
+  # manages the CronJob object, never the Jobs/Pods it spawns at
+  # runtime (those are reconciled by the cluster's own CronJob
+  # controller, not by this ServiceAccount).
+  rule {
+    api_groups = ["batch"]
+    resources  = ["cronjobs"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
 }
 
 resource "kubernetes_role_binding_v1" "k3s_apps_ci" {
