@@ -45,6 +45,12 @@ terraform plan
 terraform apply
 ```
 
+Or `scripts/roll-out.sh plan`/`apply`, which does the SSH tunnel + kubeconfig
+check + `TF_VAR_github_runner_github_token` export above automatically
+(leaving an already-open tunnel alone, closing one it started itself) --
+still needs the AWS credentials prerequisite above done manually first,
+same as `terraform apply` on its own would.
+
 ## State
 
 ```text
