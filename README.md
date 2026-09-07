@@ -45,11 +45,13 @@ terraform plan
 terraform apply
 ```
 
-Or `scripts/roll-out.sh plan`/`apply`, which does the SSH tunnel + kubeconfig
-check + `TF_VAR_github_runner_github_token` export above automatically
-(leaving an already-open tunnel alone, closing one it started itself) --
-still needs the AWS credentials prerequisite above done manually first,
-same as `terraform apply` on its own would.
+Or `scripts/roll-out.sh plan`/`apply`, which does all of the above
+automatically -- the SSH tunnel + kubeconfig check, AWS credentials for
+the `k3s-bootstrap-local` IAM identity from `pass` (see
+`bootstrap/terraform-state/README.md`'s "k3s-bootstrap-local Identity"
+section for how those get created), and the
+`TF_VAR_github_runner_github_token` export -- leaving an already-open
+tunnel alone, closing one it started itself.
 
 ## State
 

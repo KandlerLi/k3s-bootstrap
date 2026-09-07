@@ -10,11 +10,10 @@
 #   scripts/roll-out.sh apply
 #
 # Needs, none of which this script sets up on its own:
-# - AWS credentials for this root's own S3 state backend -- still a
-#   manual `aws login` as root/an admin-equivalent identity first
-#   (this root has no scoped, non-root identity today, unlike
-#   github/repo-infra's own repo-infra-local -- julian's own policy
-#   doesn't grant it k3s-bootstrap/* state access at all).
+# - AWS credentials for the k3s-bootstrap-local IAM identity, in pass
+#   at aws/k3s-bootstrap-local/access-key-id and .../secret-access-key
+#   -- see bootstrap/terraform-state/README.md's "k3s-bootstrap-local
+#   Identity" section for how those got there in the first place.
 # - The node's own admin kubeconfig at ~/.kube/k3s-node-1.yaml -- a
 #   one-time `scp` pull, see infra/k3s-apps' own README.
 
@@ -45,6 +44,15 @@ k3s_apps_dir="${K3S_APPS_DIR:-$(cd "${repo_root}/../../infra/k3s-apps" 2>/dev/nu
 
 kubeconfig="${HOME}/.kube/k3s-node-1.yaml"
 [ -f "${kubeconfig}" ] || fail "${kubeconfig} is missing -- one-time setup: see infra/k3s-apps' own README for the scp command that pulls it"
+
+access_key_id="$(pass show aws/k3s-bootstrap-local/access-key-id 2>/dev/null | head -1 || true)"
+[ -n "${access_key_id}" ] || fail "pass entry aws/k3s-bootstrap-local/access-key-id is empty or missing -- see bootstrap/terraform-state/README.md's 'k3s-bootstrap-local Identity' section"
+
+secret_access_key="$(pass show aws/k3s-bootstrap-local/secret-access-key 2>/dev/null | head -1 || true)"
+[ -n "${secret_access_key}" ] || fail "pass entry aws/k3s-bootstrap-local/secret-access-key is empty or missing -- see bootstrap/terraform-state/README.md's 'k3s-bootstrap-local Identity' section"
+
+export AWS_ACCESS_KEY_ID="${access_key_id}"
+export AWS_SECRET_ACCESS_KEY="${secret_access_key}"
 
 tunnel_pattern="ssh.*-L 6443:192.168.101.10:6443"
 tunnel_started_by_this_script=0
