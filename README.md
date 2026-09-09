@@ -30,11 +30,11 @@ via CI using the `k3s-apps-ci` ServiceAccount this repo creates
   kubeconfig at `~/.kube/k3s-node-1.yaml` — see `infra/k3s-apps`' own
   README for the exact tunnel + kubeconfig steps (this repo uses the
   identical setup, just far less often)
-- AWS credentials for the shared `jkandler-terraform-state` S3 backend
-- `TF_VAR_github_runner_github_token`, sourced the same way
-  `infra/k3s-apps`' own `scripts/export-tf-vars.sh` already does (that
-  script exports this value too, even though this repo isn't its
-  primary consumer)
+- AWS credentials for the shared `jkandler-terraform-state` S3 backend,
+  same identity also used to read `secrets.tf`'s own
+  `home-infra/github-runner` AWS Secrets Manager secret (the
+  SOPS-to-Secrets-Manager cutover, `PARKED.md`) -- no separate
+  `TF_VAR_github_runner_github_token` needed any more
 
 ## Deploy
 
@@ -46,12 +46,11 @@ terraform apply
 ```
 
 Or `scripts/roll-out.sh plan`/`apply`, which does all of the above
-automatically -- the SSH tunnel + kubeconfig check, AWS credentials for
-the `k3s-bootstrap-local` IAM identity from `pass` (see
+automatically -- the SSH tunnel + kubeconfig check, and AWS credentials
+for the `k3s-bootstrap-local` IAM identity from `pass` (see
 `bootstrap/terraform-state/README.md`'s "k3s-bootstrap-local Identity"
-section for how those get created), and the
-`TF_VAR_github_runner_github_token` export -- leaving an already-open
-tunnel alone, closing one it started itself.
+section for how those get created) -- leaving an already-open tunnel
+alone, closing one it started itself.
 
 ## State
 

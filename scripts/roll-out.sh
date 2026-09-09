@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Mimics what a real CI pipeline would do for this repo's own apply,
-# run locally: set up the SSH tunnel + kubeconfig + secrets this root's
-# Terraform needs, run it, then tear back down whatever this script
-# itself stood up -- so a tunnel this script started doesn't outlive
-# the run, but a tunnel that was already open before it started (e.g.
-# from an unrelated kubectl session) is left alone either way.
+# run locally: set up the SSH tunnel + kubeconfig this root's Terraform
+# needs, run it, then tear back down whatever this script itself stood
+# up -- so a tunnel this script started doesn't outlive the run, but a
+# tunnel that was already open before it started (e.g. from an
+# unrelated kubectl session) is left alone either way.
 #
 #   scripts/roll-out.sh plan
 #   scripts/roll-out.sh apply
@@ -13,7 +13,11 @@
 # - AWS credentials for the k3s-bootstrap-local IAM identity, in pass
 #   at aws/k3s-bootstrap-local/access-key-id and .../secret-access-key
 #   -- see bootstrap/terraform-state/README.md's "k3s-bootstrap-local
-#   Identity" section for how those got there in the first place.
+#   Identity" section for how those got there in the first place. Also
+#   covers secrets.tf's own AWS Secrets Manager read now (the
+#   SOPS-to-Secrets-Manager cutover, PARKED.md) -- no more separate
+#   TF_VAR_github_runner_github_token or dependency on infra/k3s-apps'
+#   own export-tf-vars.sh for it.
 # - The node's own admin kubeconfig at ~/.kube/k3s-node-1.yaml -- a
 #   one-time `scp` pull, see infra/k3s-apps' own README.
 
@@ -38,9 +42,6 @@ fail() {
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(dirname "${script_dir}")"
-k3s_apps_dir="${K3S_APPS_DIR:-$(cd "${repo_root}/../../infra/k3s-apps" 2>/dev/null && pwd || true)}"
-[ -n "${k3s_apps_dir}" ] && [ -f "${k3s_apps_dir}/scripts/export-tf-vars.sh" ] \
-  || fail "can't find infra/k3s-apps' scripts/export-tf-vars.sh (looked in '${k3s_apps_dir:-<unset>}') -- set K3S_APPS_DIR if your checkout layout differs"
 
 kubeconfig="${HOME}/.kube/k3s-node-1.yaml"
 [ -f "${kubeconfig}" ] || fail "${kubeconfig} is missing -- one-time setup: see infra/k3s-apps' own README for the scp command that pulls it"
@@ -72,13 +73,6 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
-
-# Sourced *inside this script's own process*, not the caller's
-# interactive shell (this script is executed, not sourced) -- so
-# nothing it exports outlives this run either, same as the AWS/GITHUB_TOKEN
-# exports in github/repo-infra's own roll-out.sh.
-# shellcheck source=/dev/null
-source "${k3s_apps_dir}/scripts/export-tf-vars.sh"
 
 cd "${repo_root}"
 

@@ -3,9 +3,11 @@ variable "github_runner_github_token" {
     Fine-grained GitHub PAT with Administration: write on every
     repository in var.github_runner_repositories -- the exact same
     value, same scope as home-infra's own github_runner_github_token
-    SOPS secret (the VM-based role's own PAT, reused rather than
-    duplicated -- see home-infra's ansible/roles/github_runner/README).
-    Pass via TF_VAR_github_runner_github_token at apply time.
+    (the VM-based role's own PAT, reused rather than duplicated -- see
+    home-infra's ansible/roles/github_runner/README). Passed in by the
+    root's own main.tf, sourced from the home-infra/github-runner AWS
+    Secrets Manager secret (secrets.tf) -- not a root TF_VAR itself,
+    this is just the module's own input variable.
   EOT
   type        = string
   sensitive   = true

@@ -17,7 +17,7 @@
 module "github_runner" {
   source = "./modules/github_runner"
 
-  github_runner_github_token = var.github_runner_github_token
+  github_runner_github_token = local.home_infra_github_runner["github_runner_github_token"]
   github_runner_repositories = var.github_runner_repositories
 
   github_runner_service_accounts = {
