@@ -367,14 +367,26 @@ resource "kubernetes_deployment_v1" "github_runner" {
           # installs, and arbitrary workflow steps all need to write to
           # it, the same reason home-infra's own per-repo service
           # accounts were never given a restricted shell either.
+          #
+          # memory bumped 2026-09-09: confirmed live, this exact
+          # container OOMKilled (exitCode 137) mid-`terraform plan` for
+          # infra/k3s-apps -- its own state has grown substantially
+          # (the Authelia rollout, its OIDC provider config, new
+          # Grafana/Open WebUI resources, all added the day before).
+          # Ephemeral runners don't recover from this the way a normal
+          # crash-looping Pod would: the job's own GitHub Actions run
+          # is permanently orphaned (the process that would report back
+          # is gone), sitting "in_progress" until GitHub's own
+          # dead-runner detection eventually catches up, however long
+          # that takes -- had to be caught and cancelled manually.
           resources {
             requests = {
               cpu    = "10m"
-              memory = "64Mi"
+              memory = "128Mi"
             }
             limits = {
               cpu    = "200m"
-              memory = "256Mi"
+              memory = "512Mi"
             }
           }
 
