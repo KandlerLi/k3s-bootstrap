@@ -368,17 +368,33 @@ resource "kubernetes_deployment_v1" "github_runner" {
           # it, the same reason home-infra's own per-repo service
           # accounts were never given a restricted shell either.
           #
-          # memory bumped 2026-09-09: confirmed live, this exact
-          # container OOMKilled (exitCode 137) mid-`terraform plan` for
-          # infra/k3s-apps -- its own state has grown substantially
-          # (the Authelia rollout, its OIDC provider config, new
-          # Grafana/Open WebUI resources, all added the day before).
-          # Ephemeral runners don't recover from this the way a normal
-          # crash-looping Pod would: the job's own GitHub Actions run
-          # is permanently orphaned (the process that would report back
-          # is gone), sitting "in_progress" until GitHub's own
-          # dead-runner detection eventually catches up, however long
-          # that takes -- had to be caught and cancelled manually.
+          # memory bumped 2026-09-09 (128Mi->512Mi): confirmed live,
+          # this exact container OOMKilled (exitCode 137) mid-`terraform
+          # plan` for infra/k3s-apps -- its own state had grown
+          # substantially (the Authelia rollout, its OIDC provider
+          # config, new Grafana/Open WebUI resources, all added the day
+          # before). Ephemeral runners don't recover from this the way
+          # a normal crash-looping Pod would: the job's own GitHub
+          # Actions run is permanently orphaned (the process that would
+          # report back is gone), sitting "in_progress" until GitHub's
+          # own dead-runner detection eventually catches up, however
+          # long that takes -- had to be caught and cancelled manually.
+          #
+          # Bumped again same day (512Mi->1Gi): confirmed live, this
+          # same limit was already insufficient again a few hours
+          # later -- 21 more OOMKills, this time on infra/k3s-apps'
+          # first-ever `terraform init` pulling a real provider
+          # (hashicorp/aws, added for that repo's own Secrets Manager
+          # cutover) on top of the same growing state, genuinely a
+          # heavier `terraform init`/`plan` than this repo had ever
+          # run before, not the same fixed workload the first bump was
+          # sized for. Doubled rather than nudged, since "bump exactly
+          # to today's peak" already proved to be exactly the trap the
+          # first fix fell into -- this for_each's own single resource
+          # block covers every repo's own runner, so headroom here
+          # benefits all of them, not just k3s-apps'. Node capacity
+          # confirmed live to have real room for this (k3s-node-2 at
+          # ~43% actual memory use beforehand, kubectl top).
           resources {
             requests = {
               cpu    = "10m"
@@ -386,7 +402,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
             }
             limits = {
               cpu    = "200m"
-              memory = "512Mi"
+              memory = "1Gi"
             }
           }
 
