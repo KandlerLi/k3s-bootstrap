@@ -201,6 +201,24 @@ resource "kubernetes_deployment_v1" "github_runner" {
         labels = {
           app = "github-runner-${each.key}"
         }
+
+        # Found live 2026-09-12, ahead of a real PAT rotation: the
+        # "runner" container's own ACCESS_TOKEN is env.valueFrom.
+        # secretKeyRef, read once at container start and never
+        # refreshed -- same class of gap already fixed for
+        # modules/ingress's ACME credentials and modules/alertmanager's
+        # config Secret in infra/k3s-apps. Ephemeral mode (EPHEMERAL=
+        # true below) bounds the staleness window to "until this Pod's
+        # current job finishes," not indefinite, but an idle runner
+        # waiting on its next job could sit on a stale token for a long
+        # time regardless. This checksum makes rotation deterministic:
+        # changing the shared Secret's value changes every one of these
+        # 7 Deployments' pod templates, so Kubernetes rolls a fresh Pod
+        # on its own -- what "one apply rolls every runner at once"
+        # (this module's own README) actually requires to be true.
+        annotations = {
+          "checksum/token" = sha256(kubernetes_secret_v1.github_runner_token.data["token"])
+        }
       }
 
       spec {
