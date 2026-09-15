@@ -30,3 +30,8 @@ jobs:
       runs_on: '["ubuntu-latest"]'
     permissions:
       contents: read
+
+  gitleaks:
+    uses: KandlerLi/gha-common/.github/workflows/gitleaks.yml@v0.0.12
+    permissions:
+      contents: read
