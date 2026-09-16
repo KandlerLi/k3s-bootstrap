@@ -56,9 +56,15 @@ resource "kubernetes_role_v1" "k3s_apps_ci" {
     resources  = ["services", "configmaps", "secrets", "persistentvolumeclaims", "endpoints"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
+  # daemonsets added 2026-09-16 for modules/node_exporter's own
+  # kubernetes_daemon_set_v1 -- the first DaemonSet-shaped module in
+  # that repo, so this resource type was never granted before (same
+  # shape as the cronjobs rule below, added for sankey_export's own
+  # first CronJob). Same api_group as deployments, so it's added to
+  # this rule's own resources list rather than a new rule block.
   rule {
     api_groups = ["apps"]
-    resources  = ["deployments"]
+    resources  = ["deployments", "daemonsets"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
   rule {
