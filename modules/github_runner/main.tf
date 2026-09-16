@@ -462,6 +462,19 @@ resource "kubernetes_deployment_v1" "github_runner" {
             name       = "docker-socket"
             mount_path = "/var/run"
           }
+          # Terraform's own provider cache -- see the "dind" container's
+          # own identical mount below for why this needs to exist at the
+          # same absolute path in both containers, and TF_PLUGIN_CACHE_DIR
+          # in infra/k3s-apps' own checks.yml/apply.yml (this repo's
+          # terraform runs directly on this container, no container: job
+          # involved) and gha-common's terraform-checks.yml/
+          # terraform-apply.yml (bind-mounted into their own container:
+          # jobs instead, which run on a separate nested Docker network
+          # this Pod's own env vars never reach).
+          volume_mount {
+            name       = "terraform-plugin-cache"
+            mount_path = "/terraform-plugin-cache"
+          }
         }
 
         container {
@@ -488,12 +501,8 @@ resource "kubernetes_deployment_v1" "github_runner" {
             }
           }
 
-          # Avoids overlayfs-on-overlayfs (this container's own writable
-          # layer already is one) for everything a real docker build
-          # actually writes -- a plain emptyDir, not a PVC: build cache
-          # losing itself on a Pod restart is a performance hit, not
-          # data loss, the same "starting fresh is low-stakes" reasoning
-          # modules/alertmanager's own no-PVC decision used.
+          # host_path now, not emptyDir -- see the volume block below for
+          # why.
           volume_mount {
             name       = "docker-data"
             mount_path = "/var/lib/docker"
@@ -531,11 +540,52 @@ resource "kubernetes_deployment_v1" "github_runner" {
             sub_path   = "daemon.json"
             read_only  = true
           }
+          # Same path as the "runner" container's own mount above -- a
+          # container: job's own bind-mount source (gha-common's
+          # terraform-checks.yml/terraform-apply.yml `-v` option) resolves
+          # against this daemon's own filesystem, not the client's, the
+          # same reason actions-runner-install/work are mounted here too.
+          volume_mount {
+            name       = "terraform-plugin-cache"
+            mount_path = "/terraform-plugin-cache"
+          }
         }
 
+        # host_path, not emptyDir, for docker-data/terraform-plugin-cache:
+        # EPHEMERAL means a fresh Pod (and a fresh emptyDir) per job, so
+        # both Docker's own layer cache and Terraform's own provider cache
+        # were being wiped on every single run. Confirmed live for the
+        # Terraform side specifically (BACKLOG.md's "k3s-apps CI" entry:
+        # `terraform init` alone took 5-8 minutes on every PR check, not
+        # just the first); the same "ephemeral Pod, no persisted cache"
+        # mechanism applies architecturally to every repo's own
+        # "docker build" CI-image step too (home-infra's checks.yml,
+        # gha-common's terraform-checks.yml/terraform-apply.yml), not yet
+        # separately measured. node_selector above already
+        # pins every repo's Deployment to k3s-node-2 permanently, so a
+        # host_path here persists across Pod restarts exactly the way an
+        # actual cache needs to, at no new node-coupling cost. Both scoped
+        # under each.key (this repo's own id): every repo's Deployment
+        # lands on this same node, so an unscoped shared path would mean
+        # independent dockerd processes fighting over one on-disk docker
+        # root, or unrelated repos' own Terraform providers colliding in
+        # one plugin-cache directory. DirectoryOrCreate so the very first
+        # run per repo doesn't need either path pre-created by hand --
+        # same pattern infra/k3s-apps' own modules/sankey_export/main.tf
+        # already uses for its own single-node hostPath cache.
         volume {
           name = "docker-data"
-          empty_dir {}
+          host_path {
+            path = "/var/lib/k3s-github-runner-cache/${each.key}/docker-data"
+            type = "DirectoryOrCreate"
+          }
+        }
+        volume {
+          name = "terraform-plugin-cache"
+          host_path {
+            path = "/var/lib/k3s-github-runner-cache/${each.key}/terraform-plugin-cache"
+            type = "DirectoryOrCreate"
+          }
         }
         volume {
           name = "actions-runner-install"
