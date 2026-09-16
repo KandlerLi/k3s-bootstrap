@@ -202,22 +202,27 @@ resource "kubernetes_deployment_v1" "github_runner" {
           app = "github-runner-${each.key}"
         }
 
-        # Found live 2026-09-12, ahead of a real PAT rotation: the
-        # "runner" container's own ACCESS_TOKEN is env.valueFrom.
-        # secretKeyRef, read once at container start and never
-        # refreshed -- same class of gap already fixed for
+        # Found live 2026-09-12, ahead of a real PAT rotation (still
+        # applies the same way to the App private key that replaced
+        # it 2026-09-16): the "runner" container's own credentials are
+        # env.valueFrom.secretKeyRef, read once at container start and
+        # never refreshed -- same class of gap already fixed for
         # modules/ingress's ACME credentials and modules/alertmanager's
         # config Secret in infra/k3s-apps. Ephemeral mode (EPHEMERAL=
         # true below) bounds the staleness window to "until this Pod's
         # current job finishes," not indefinite, but an idle runner
-        # waiting on its next job could sit on a stale token for a long
-        # time regardless. This checksum makes rotation deterministic:
-        # changing the shared Secret's value changes every one of these
-        # 7 Deployments' pod templates, so Kubernetes rolls a fresh Pod
-        # on its own -- what "one apply rolls every runner at once"
-        # (this module's own README) actually requires to be true.
+        # waiting on its next job could sit on a stale credential for a
+        # long time regardless. This checksum makes rotation
+        # deterministic: changing the shared Secret's value changes
+        # every one of these Deployments' pod templates, so Kubernetes
+        # rolls a fresh Pod on its own -- what "one apply rolls every
+        # runner at once" (this module's own README) actually requires
+        # to be true. Hashes the private key specifically, not app_id
+        # (which never changes on its own -- rotation here means
+        # generating a fresh key in the App's own settings, not a new
+        # App).
         annotations = {
-          "checksum/token" = sha256(kubernetes_secret_v1.github_runner_token.data["token"])
+          "checksum/token" = sha256(kubernetes_secret_v1.github_runner_token.data["app_private_key"])
         }
       }
 
@@ -286,14 +291,35 @@ resource "kubernetes_deployment_v1" "github_runner" {
           command = ["sh", "-c", "umask 000 && exec /entrypoint.sh \"$@\"", "sh"]
           args    = ["./bin/Runner.Listener", "run", "--startuptype", "service"]
 
+          # GitHub App auth (2026-09-16), not a static ACCESS_TOKEN --
+          # the entrypoint's own app_token.sh signs a JWT with
+          # APP_PRIVATE_KEY and mints a fresh, short-lived installation
+          # access token at container start, using APP_ID to identify
+          # the App and APP_LOGIN (var.github_runner_owner -- a plain
+          # value, not a Secret key, since it's the same public account
+          # name REPO_URL below already uses) to resolve which
+          # installation to mint it for.
           env {
-            name = "ACCESS_TOKEN"
+            name = "APP_ID"
             value_from {
               secret_key_ref {
                 name = kubernetes_secret_v1.github_runner_token.metadata[0].name
-                key  = "token"
+                key  = "app_id"
               }
             }
+          }
+          env {
+            name = "APP_PRIVATE_KEY"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret_v1.github_runner_token.metadata[0].name
+                key  = "app_private_key"
+              }
+            }
+          }
+          env {
+            name  = "APP_LOGIN"
+            value = var.github_runner_owner
           }
           env {
             name  = "REPO_URL"

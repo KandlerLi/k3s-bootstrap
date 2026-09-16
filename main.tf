@@ -17,8 +17,9 @@
 module "github_runner" {
   source = "./modules/github_runner"
 
-  github_runner_github_token = local.home_infra_github_runner["github_runner_github_token"]
-  github_runner_repositories = var.github_runner_repositories
+  github_runner_app_id          = local.home_infra_github_runner["app_id"]
+  github_runner_app_private_key = local.home_infra_github_runner["app_private_key"]
+  github_runner_repositories    = var.github_runner_repositories
 
   github_runner_service_accounts = {
     k3s-apps = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
