@@ -1,13 +1,37 @@
-variable "github_runner_github_token" {
+variable "github_runner_app_id" {
   description = <<-EOT
-    Fine-grained GitHub PAT with Administration: write on every
-    repository in var.github_runner_repositories -- the exact same
-    value, same scope as home-infra's own github_runner_github_token
-    (the VM-based role's own PAT, reused rather than duplicated -- see
-    home-infra's ansible/roles/github_runner/README). Passed in by the
-    root's own main.tf, sourced from the home-infra/github-runner AWS
-    Secrets Manager secret (secrets.tf) -- not a root TF_VAR itself,
+    The GitHub App's own numeric App ID (KandlerLi's
+    kandlerli-home-infra-runner App -- Administration: write,
+    installed on every repository in var.github_runner_repositories).
+    Not itself secret (GitHub shows it on the App's own public
+    settings page), but sourced from the same home-infra/github-runner
+    AWS Secrets Manager secret as github_runner_app_private_key for
+    convenience -- one JSON blob holds both, matching every other
+    Secrets Manager group's own shape in this workspace. Passed in by
+    the root's own main.tf (secrets.tf) -- not a root TF_VAR itself,
     this is just the module's own input variable.
+
+    Replaced the module's original github_runner_github_token
+    (a durable, manually-rotated fine-grained PAT) 2026-09-16: the
+    community myoung34/github-runner image (this module's own runner
+    image) natively supports GitHub App auth via APP_ID/
+    APP_PRIVATE_KEY/APP_LOGIN in place of ACCESS_TOKEN, minting its
+    own short-lived registration token internally at container start
+    -- removes the manual PAT-rotation chore entirely rather than just
+    making it easier.
+  EOT
+  type        = string
+}
+
+variable "github_runner_app_private_key" {
+  description = <<-EOT
+    The GitHub App's own private key (PEM, the raw multi-line content
+    as GitHub's "Generate a private key" button downloads it) --
+    genuinely secret, unlike github_runner_app_id above. Used by the
+    runner image's own entrypoint to sign a JWT and mint a fresh,
+    short-lived installation access token at container start, the
+    same underlying mechanism GitHub's own GITHUB_TOKEN uses inside
+    Actions workflows.
   EOT
   type        = string
   sensitive   = true
