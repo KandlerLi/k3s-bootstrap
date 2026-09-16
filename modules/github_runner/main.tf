@@ -439,13 +439,34 @@ resource "kubernetes_deployment_v1" "github_runner" {
           # benefits all of them, not just k3s-apps'. Node capacity
           # confirmed live to have real room for this (k3s-node-2 at
           # ~43% actual memory use beforehand, kubectl top).
+          #
+          # cpu limit bumped 2026-09-16 (200m->1000m, matching the
+          # "dind" container's own limit below): confirmed live via this
+          # container's own cgroup, right after the terraform-plugin-
+          # cache volume above went live, that `terraform init` re-
+          # verifying a cached provider's checksum against the lock file
+          # -- genuinely CPU-bound work, unlike the network-bound cold
+          # download it replaces -- was hitting the CPU limit on 97% of
+          # scheduling periods (`cat /sys/fs/cgroup/cpu.stat`:
+          # nr_periods 2962, nr_throttled 2866, throttled_usec
+          # ~292,000,000), stretching a sub-second hash+link into
+          # 70s-2m12s per provider -- a cache hit that was barely faster
+          # than the cold download it was meant to replace. Same
+          # reasoning as the memory bumps above: this for_each's own
+          # single resource block covers every repo's own runner, so
+          # this benefits all of them, not just k3s-apps' Terraform
+          # runs. Node capacity confirmed live to have real room for
+          # this too (k3s-node-2 at 13% actual CPU use beforehand,
+          # `kubectl top node`; requests stay at 10m, so this only
+          # widens how much a single Pod may burst to, not what
+          # scheduling reserves).
           resources {
             requests = {
               cpu    = "10m"
               memory = "128Mi"
             }
             limits = {
-              cpu    = "200m"
+              cpu    = "1000m"
               memory = "1Gi"
             }
           }
