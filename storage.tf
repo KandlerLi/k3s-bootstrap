@@ -84,6 +84,35 @@ resource "kubernetes_persistent_volume_v1" "deluge_config" {
 # own open-webui container only ever had one bind mount
 # (open_webui_data_dir -> /app/backend/data), covering the sqlite
 # database, WEBUI_SECRET_KEY_FILE, and the HOME subdirectory together.
+# Write target for infra/k3s-apps' own modules/authelia/cronjob.tf --
+# a *different* PV from Authelia's own real data (authelia_data,
+# local-path/hostPath, defined in that module directly since it's
+# namespace-scoped). This one exists purely so a periodic backup
+# snapshot can leave that node's own disk, landing on the homeserver's
+# real filesystem the same way every other NFS-backed PV here already
+# does. Directory owned by infra/home-infra's own authelia_backup role.
+resource "kubernetes_persistent_volume_v1" "authelia_backup" {
+  metadata {
+    name = "authelia-backup-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "1Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/authelia-backup"
+      }
+    }
+  }
+}
+
 resource "kubernetes_persistent_volume_v1" "open_webui_data" {
   metadata {
     name = "open-webui-data-pv"
