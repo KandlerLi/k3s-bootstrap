@@ -460,13 +460,29 @@ resource "kubernetes_deployment_v1" "github_runner" {
           # `kubectl top node`; requests stay at 10m, so this only
           # widens how much a single Pod may burst to, not what
           # scheduling reserves).
+          #
+          # Bumped again 2026-09-17 (1000m->2000m, the node's full 2
+          # cores -- going higher than that would be a no-op ceiling on
+          # this node regardless): confirmed live via aws/website's own
+          # runner cgroup mid-job that the 1000m limit was still being
+          # hit on ~14% of scheduling periods (nr_periods 177,
+          # nr_throttled 25, throttled_usec ~822,000 of ~7.7s total CPU
+          # usage) during a `terraform validate` run. Node capacity
+          # confirmed live to have room (k3s-node-2 at 4% actual CPU
+          # use beforehand, `kubectl top node`); requests stay at 10m,
+          # so this again only widens the burst ceiling, not what
+          # scheduling reserves. Note this container's own limit can
+          # never usefully exceed the node's 2 physical cores, and
+          # under genuine concurrent load from more than one of this
+          # for_each's 8 runners at once, the real constraint becomes
+          # that shared physical ceiling, not this per-Pod number.
           resources {
             requests = {
               cpu    = "10m"
               memory = "128Mi"
             }
             limits = {
-              cpu    = "1000m"
+              cpu    = "2000m"
               memory = "1Gi"
             }
           }
