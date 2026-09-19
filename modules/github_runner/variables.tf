@@ -80,3 +80,22 @@ variable "github_runner_service_accounts" {
   type        = map(string)
   default     = {}
 }
+
+variable "github_runner_slots_per_repository" {
+  description = <<-EOT
+    How many runner Deployments (slots) each repository gets. Every
+    slot is an independent ephemeral runner that registers under the
+    same labels, so GitHub hands concurrent jobs (e.g. a PR check and
+    a post-merge apply) to different slots instead of queueing them.
+    Each slot has its own docker-data cache on k3s-node-2's disk and
+    its own idle requests (~60m CPU/256Mi), so size k3s-node-2 for
+    repositories x slots.
+  EOT
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.github_runner_slots_per_repository >= 1
+    error_message = "At least one runner slot per repository is required."
+  }
+}
