@@ -99,3 +99,36 @@ variable "github_runner_slots_per_repository" {
     error_message = "At least one runner slot per repository is required."
   }
 }
+
+variable "github_runner_prune_interval_seconds" {
+  description = <<-EOT
+    How often each runner Pod's "pruner" sidecar prunes its own dind
+    daemon's unused images and build cache. Every slot has its own
+    persistent docker-data hostPath on k3s-node-2's disk, which nothing
+    else ever cleans.
+  EOT
+  type        = number
+  default     = 3600
+}
+
+variable "github_runner_prune_unused_image_age" {
+  description = <<-EOT
+    Passed to `docker image prune --all --filter until=`: unused images
+    older than this are removed. Images used by a running container are
+    never removed regardless.
+  EOT
+  type        = string
+  default     = "24h"
+}
+
+variable "github_runner_prune_build_cache_keep_storage" {
+  description = <<-EOT
+    Passed to `docker builder prune --keep-storage`: the most build
+    cache each slot's daemon keeps. This is per slot, so total worst
+    case is roughly repositories x slots x this value, plus the
+    images kept by github_runner_prune_unused_image_age -- size it
+    against k3s-node-2's disk (42GB at time of writing).
+  EOT
+  type        = string
+  default     = "2GB"
+}
