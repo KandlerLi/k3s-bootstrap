@@ -595,6 +595,55 @@ resource "kubernetes_deployment_v1" "github_runner" {
           }
         }
 
+        # Keeps each slot's docker-data hostPath (below) from growing
+        # without bound. That cache deliberately outlives Pods, so
+        # nothing else ever removes an image or build layer from it;
+        # confirmed live 2026-09-19 that k3s-node-2's 42GB root disk
+        # climbed 39% -> 92% in ~3 days, in ~10GB steps, once every
+        # repository had its own persistent cache per slot. Reuses the
+        # dind image (it already ships the docker CLI) instead of adding
+        # a new pinned image, and talks to the sibling dockerd over the
+        # same shared socket the runner container uses. Unprivileged:
+        # the socket is all it needs. Prune only ever removes what is
+        # unused, so an in-flight job's images and cache are untouched;
+        # the cache-warming benefit is kept for anything used recently.
+        container {
+          name  = "pruner"
+          image = "docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07"
+
+          command = ["sh", "-c"]
+          args = [
+            <<-EOT
+              while true; do
+                sleep ${var.github_runner_prune_interval_seconds}
+                docker image prune --all --force --filter until=${var.github_runner_prune_unused_image_age} || true
+                docker builder prune --force --keep-storage ${var.github_runner_prune_build_cache_keep_storage} || true
+              done
+            EOT
+          ]
+
+          env {
+            name  = "DOCKER_HOST"
+            value = "unix:///var/run/docker.sock"
+          }
+
+          resources {
+            requests = {
+              cpu    = "5m"
+              memory = "16Mi"
+            }
+            limits = {
+              cpu    = "100m"
+              memory = "128Mi"
+            }
+          }
+
+          volume_mount {
+            name       = "docker-socket"
+            mount_path = "/var/run"
+          }
+        }
+
         # host_path, not emptyDir, for docker-data/terraform-plugin-cache:
         # EPHEMERAL means a fresh Pod (and a fresh emptyDir) per job, so
         # both Docker's own layer cache and Terraform's own provider cache
