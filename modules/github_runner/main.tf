@@ -1,5 +1,5 @@
 # Phase B of moving github_runner to k3s (see the approved plan in
-# home-infra's own plan history): one Deployment per repository in
+# home-infra's own plan history): one Deployment per repository and slot (see github_runner_slots_per_repository) in
 # var.github_runner_repositories, via for_each -- the first use of
 # for_each in this module (originally written alongside 8 sibling
 # "one module per distinct service" app modules in infra/k3s-apps,
@@ -122,9 +122,16 @@
 # else there's already real data to size from.
 
 locals {
-  github_runner_repositories_by_id = {
-    for repo in var.github_runner_repositories : repo.id => merge(repo, {
-      service_account_name = try(var.github_runner_service_accounts[repo.id], null)
+  # One entry per (repository, slot): every slot is its own Deployment
+  # (own Pod, own dind, own docker-data hostPath), so a PR job and a
+  # main job for the same repository can run at the same time. Not
+  # replicas > 1 on one Deployment: that would point two dockerd
+  # processes at a single docker-data root.
+  github_runner_slots_by_key = {
+    for pair in setproduct(var.github_runner_repositories, range(1, var.github_runner_slots_per_repository + 1)) :
+    "${pair[0].id}-${pair[1]}" => merge(pair[0], {
+      slot                 = pair[1]
+      service_account_name = try(var.github_runner_service_accounts[pair[0].id], null)
     })
   }
 }
@@ -181,7 +188,7 @@ resource "kubernetes_config_map_v1" "github_runner_dind_daemon_config" {
 }
 
 resource "kubernetes_deployment_v1" "github_runner" {
-  for_each = local.github_runner_repositories_by_id
+  for_each = local.github_runner_slots_by_key
 
   metadata {
     name = "github-runner-${each.key}"
@@ -602,8 +609,9 @@ resource "kubernetes_deployment_v1" "github_runner" {
         # pins every repo's Deployment to k3s-node-2 permanently, so a
         # host_path here persists across Pod restarts exactly the way an
         # actual cache needs to, at no new node-coupling cost. Both scoped
-        # under each.key (this repo's own id): every repo's Deployment
-        # lands on this same node, so an unscoped shared path would mean
+        # under each.key (repository id + slot): every Deployment
+        # lands on this same node, and two slots of one repo can run at
+        # once (Terraform's plugin cache isn't safe for concurrent writers), so an unscoped shared path would mean
         # independent dockerd processes fighting over one on-disk docker
         # root, or unrelated repos' own Terraform providers colliding in
         # one plugin-cache directory. DirectoryOrCreate so the very first
