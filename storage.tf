@@ -134,3 +134,50 @@ resource "kubernetes_persistent_volume_v1" "open_webui_data" {
     }
   }
 }
+
+# Paperless-ngx (ADR 0023): live documents on the black HDD, and the
+# nightly document_exporter target on the red HDD. Directories owned by
+# infra/home-infra's paperless_storage role.
+resource "kubernetes_persistent_volume_v1" "paperless_media" {
+  metadata {
+    name = "paperless-media-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "100Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/black-hdd/paperless-media"
+      }
+    }
+  }
+}
+
+resource "kubernetes_persistent_volume_v1" "paperless_export" {
+  metadata {
+    name = "paperless-export-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "100Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/paperless-export"
+      }
+    }
+  }
+}
