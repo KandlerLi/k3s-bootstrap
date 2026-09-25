@@ -132,3 +132,9 @@ variable "github_runner_prune_build_cache_keep_storage" {
   type        = string
   default     = "2GB"
 }
+
+variable "github_runner_api_server_ip" {
+  description = "k3s server node address runners with a ServiceAccount reach the Kubernetes API on (port 6443) -- infra/home-infra's k3s_node_vm_ip."
+  type        = string
+  default     = "192.168.101.10"
+}

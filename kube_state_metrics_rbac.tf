@@ -9,19 +9,11 @@
 # this ServiceAccount by name in a Pod spec -- that alone needs no RBAC
 # grant over the ServiceAccount object itself.
 #
-# Bound to the same built-in "view" ClusterRole as
-# kubernetes-dashboard, not kube-state-metrics' own upstream RBAC
-# manifest (a much longer bespoke ClusterRole covering ~20 resource
-# types) -- "view" already covers get/list/watch on everything
-# kube-state-metrics needs for per-node/per-workload resource-request-
-# vs-actual reporting (pods, nodes, deployments, replicasets,
-# daemonsets, statefulsets, jobs, cronjobs, services, namespaces,
-# persistentvolumeclaims, persistentvolumes), while still excluding
-# Secrets and RBAC objects themselves -- reusing it means one fewer
-# bespoke ClusterRole to keep correct over time, at the cost of
-# kube-state-metrics' own Secret-related metrics never being collected
-# (deliberately excluded from its own --resources flag in k3s-apps'
-# module to match what this binding actually grants).
+# Bound to the built-in "view" ClusterRole rather than the upstream
+# bespoke one, plus kube_state_metrics_cluster_read below: "view" only
+# covers namespaced resources, and kube-state-metrics' --resources flag
+# (k3s-apps) also lists nodes, persistentvolumes and namespaces. Secrets
+# stay excluded on both sides.
 
 resource "kubernetes_service_account_v1" "kube_state_metrics" {
   metadata {
@@ -39,6 +31,36 @@ resource "kubernetes_cluster_role_binding_v1" "kube_state_metrics_view" {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
     name      = "view"
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account_v1.kube_state_metrics.metadata[0].name
+    namespace = "default"
+  }
+}
+
+resource "kubernetes_cluster_role_v1" "kube_state_metrics_cluster_read" {
+  metadata {
+    name = "kube-state-metrics-cluster-read"
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["nodes", "persistentvolumes", "namespaces"]
+    verbs      = ["list", "watch"]
+  }
+}
+
+resource "kubernetes_cluster_role_binding_v1" "kube_state_metrics_cluster_read" {
+  metadata {
+    name = "kube-state-metrics-cluster-read"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role_v1.kube_state_metrics_cluster_read.metadata[0].name
   }
 
   subject {
