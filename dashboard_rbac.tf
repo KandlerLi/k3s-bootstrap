@@ -12,15 +12,12 @@
 # in a Pod spec -- that alone needs no RBAC grant over the
 # ServiceAccount object itself.
 #
-# Deliberately bound to the built-in "view" ClusterRole, not the
-# cluster-admin the official recommended.yaml manifest defaults to --
-# confirmed with Julian: read-only for now. "view" is a real
-# Kubernetes-shipped aggregated ClusterRole (every cluster has it),
-# covering get/list/watch on almost everything cluster-wide except
-# Secrets' own contents and RBAC objects themselves -- enough to browse
-# every workload/node/event in the UI, nothing that can change cluster
-# state even if the Basic Auth in front of it (modules/ingress's own
-# k8s.jkandler.de router) were ever bypassed.
+# Read-only, never cluster-admin (the official recommended.yaml
+# default) -- confirmed with Julian. The built-in "view" ClusterRole
+# only covers namespaced resources and excludes Secrets and RBAC, so
+# kubernetes_dashboard_cluster_read below adds read access to
+# cluster-scoped resources and RBAC objects. Secrets stay unreadable
+# on purpose: RBAC can't grant "names but not values".
 
 resource "kubernetes_service_account_v1" "kubernetes_dashboard" {
   metadata {
@@ -38,6 +35,60 @@ resource "kubernetes_cluster_role_binding_v1" "kubernetes_dashboard_view" {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
     name      = "view"
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account_v1.kubernetes_dashboard.metadata[0].name
+    namespace = "default"
+  }
+}
+
+resource "kubernetes_cluster_role_v1" "kubernetes_dashboard_cluster_read" {
+  metadata {
+    name = "kubernetes-dashboard-cluster-read"
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["nodes", "persistentvolumes", "namespaces"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["storage.k8s.io"]
+    resources  = ["storageclasses", "csidrivers", "csinodes", "volumeattachments"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["rbac.authorization.k8s.io"]
+    resources  = ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["networking.k8s.io"]
+    resources  = ["ingressclasses"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["apiextensions.k8s.io"]
+    resources  = ["customresourcedefinitions"]
+    verbs      = ["get", "list", "watch"]
+  }
+}
+
+resource "kubernetes_cluster_role_binding_v1" "kubernetes_dashboard_cluster_read" {
+  metadata {
+    name = "kubernetes-dashboard-cluster-read"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role_v1.kubernetes_dashboard_cluster_read.metadata[0].name
   }
 
   subject {
