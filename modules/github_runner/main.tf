@@ -20,7 +20,7 @@
 # Full migration history and every bug found building this (the
 # container: job bind-mount failure, the cross-machine uid mismatch,
 # the auth migration, the disk-growth/pruner story, the capacity
-# tuning): docs/home-infra-ai-context's current-state.md ("k3s
+# tuning): docs/home-infra-docs' current-state.md ("k3s
 # learning cluster") and decisions.md.
 #
 # Runner image: the community myoung34/github-runner image, not a
