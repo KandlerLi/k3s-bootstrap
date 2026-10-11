@@ -1,40 +1,4 @@
-# Statically-provisioned NFS storage, cluster-scoped -- moved here from
-# KandlerLi/k3s-apps' own modules/deluge and modules/open_webui (2026-09-03)
-# specifically because kubernetes_persistent_volume_v1 is the one
-# cluster-scoped resource type either of those modules ever needed.
-# Kubernetes RBAC's resourceNames only constrains get/update/delete on
-# *existing* named objects, never create -- so a namespaced Role for
-# that repo's CI-applied app root could never be scoped to "only these
-# three PVs" the way it can for every namespaced resource type those
-# modules use. Keeping PVs here instead means that Role never needs any
-# persistentvolumes verb at all. The matching PVC resources stay in
-# KandlerLi/k3s-apps' own modules/deluge/modules/open_webui (they're
-# namespaced, that Role covers them fine) and reference these PVs by
-# their stable name string instead of a cross-module Terraform
-# attribute, since the two roots have separate state.
-#
-# storage_class_name = "local-path" on every PV/PVC pair below -- NOT
-# the empty string "" a comment here once said. Found live: an
-# explicit "" gets serialized identically to "not set at all" by this
-# provider (a long-standing, widely-reported terraform-provider-
-# kubernetes quirk), so k3s's DefaultStorageClass admission controller
-# silently injects "local-path" into the PVC regardless of what's
-# written here. Matching the class name the admission controller
-# injects anyway, on both sides, is the actual working fix -- the real
-# local-path-provisioner is never invoked, since a suitable Available
-# PV already exists and static binding always wins over dynamic
-# provisioning.
-#
-# reclaim_policy = "Retain" on every one, not the "Delete" some
-# defaults use -- critical here specifically because these PVs point at
-# real, already-existing data through NFS, not disposable storage this
-# cluster owns the lifecycle of. Deleting a PVC must never be able to
-# touch the underlying files.
-#
-# The "storage" capacity/request values are nominal, not enforced --
-# NFS has no concept of a Kubernetes-visible quota the way a real block
-# device does. They're set generously so nothing here ever blocks on a
-# false "out of space" from Kubernetes' own bookkeeping.
+# Static NFS PVs live here, not in k3s-apps: see README, "Storage".
 
 resource "kubernetes_persistent_volume_v1" "deluge_downloads" {
   metadata {
@@ -80,17 +44,7 @@ resource "kubernetes_persistent_volume_v1" "deluge_config" {
   }
 }
 
-# Single PV, not split like Deluge's downloads/config -- home-infra's
-# own open-webui container only ever had one bind mount
-# (open_webui_data_dir -> /app/backend/data), covering the sqlite
-# database, WEBUI_SECRET_KEY_FILE, and the HOME subdirectory together.
-# Write target for KandlerLi/k3s-apps' own modules/authelia/cronjob.tf --
-# a *different* PV from Authelia's own real data (authelia_data,
-# local-path/hostPath, defined in that module directly since it's
-# namespace-scoped). This one exists purely so a periodic backup
-# snapshot can leave that node's own disk, landing on the homeserver's
-# real filesystem the same way every other NFS-backed PV here already
-# does. Directory owned by KandlerLi/home-infra's own authelia_backup role.
+# Target of k3s-apps' Authelia backup CronJob, on the homeserver's disk.
 resource "kubernetes_persistent_volume_v1" "authelia_backup" {
   metadata {
     name = "authelia-backup-pv"
@@ -135,9 +89,7 @@ resource "kubernetes_persistent_volume_v1" "open_webui_data" {
   }
 }
 
-# Paperless-ngx (ADR 0023): live documents on the black HDD, and the
-# nightly document_exporter target on the red HDD. Directories owned by
-# KandlerLi/home-infra's paperless_storage role.
+# Paperless-ngx (ADR 0023): live documents on the black HDD, exports on the red HDD.
 resource "kubernetes_persistent_volume_v1" "paperless_media" {
   metadata {
     name = "paperless-media-pv"

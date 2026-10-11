@@ -1,21 +1,6 @@
 name: Security scan
 
-# trivy config IaC misconfiguration scan -- first step of the
-# workspace-level security audit. This is the first GitHub
-# Actions workflow in this repo: it deliberately runs on a GitHub-hosted
-# runner (runs_on override below) rather than provisioning a self-hosted
-# one, since this repo otherwise has none by design -- see
-# decisions.md's self-escalation reasoning for why this repo's own
-# Terraform apply stays local-only, human-run, never CI (that part is
-# unaffected by this scan or by branch protection; both are about
-# GitHub-side gating, not about who runs terraform apply). See
-# gha-common's own README.md for the reusable workflow's full details.
-#
-# pull_request added 2026-09-15 so this can become a required status
-# check (blocking PR merges on any finding, via
-# required_status_check_contexts in repo-infra's own config.yml) --
-# confirmed clean (0 findings) already, so there's no open-findings
-# window to wait out here.
+# GitHub-hosted: this repo has no self-hosted runner by design (home-infra-docs decisions.md).
 
 on:
   pull_request:
