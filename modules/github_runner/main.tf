@@ -20,7 +20,7 @@
 # Full migration history and every bug found building this (the
 # container: job bind-mount failure, the cross-machine uid mismatch,
 # the auth migration, the disk-growth/pruner story, the capacity
-# tuning): docs/home-infra-docs' current-state.md ("k3s
+# tuning): docs/home-infra-docs' history.md ("k3s
 # learning cluster") and decisions.md.
 #
 # Runner image: the community myoung34/github-runner image, not a
@@ -44,7 +44,7 @@ locals {
   }
 }
 
-# A path-MTU black hole, not flakiness -- see current-state.md's "k3s
+# A path-MTU black hole, not flakiness -- see history.md's "k3s
 # learning cluster" entry for the full tcpdump-diagnosed story.
 # "default-network-opts" is Docker's own documented mechanism for
 # setting the default driver options -- including mtu -- for every
@@ -151,7 +151,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
           image = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
 
           # umask 000 fixes the cross-machine uid mismatch at the
-          # actual source -- see current-state.md for the polling
+          # actual source -- see history.md for the polling
           # chmod fixer this replaced (it actively fought home-infra's
           # own checks.yml security check). Minimal override -- same
           # ENTRYPOINT/CMD as the image's own default, so
@@ -286,7 +286,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
           # Memory and CPU limits were each raised twice more after
           # this, against real OOMKills and cgroup-throttling events as
           # infra/k3s-apps' own Terraform state and provider set grew
-          # -- see current-state.md's "k3s learning cluster" entry for
+          # -- see history.md's "k3s learning cluster" entry for
           # the full tuning history. This for_each's single resource
           # block covers every repo's own runner, so headroom here
           # benefits all of them. CPU requests stay at 10m regardless
@@ -409,7 +409,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
         }
 
         # Keeps each slot's docker-data hostPath (below) from growing
-        # without bound -- see current-state.md for the real disk-space
+        # without bound -- see history.md for the real disk-space
         # incident this fixes. Reuses the dind image (it already ships
         # the docker CLI) instead of adding a new pinned image, and
         # talks to the sibling dockerd over the same shared socket the
@@ -457,7 +457,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
         # EPHEMERAL means a fresh Pod (and a fresh emptyDir) per job, so
         # both Docker's own layer cache and Terraform's own provider
         # cache were being wiped on every single run -- see
-        # current-state.md for the 5-8 minute `terraform init` this
+        # history.md for the 5-8 minute `terraform init` this
         # caused on every PR check. node_selector above already
         # pins every repo's Deployment to k3s-node-2 permanently, so a
         # host_path here persists across Pod restarts exactly the way an
