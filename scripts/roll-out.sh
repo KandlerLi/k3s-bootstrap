@@ -1,25 +1,5 @@
 #!/usr/bin/env bash
-# Mimics what a real CI pipeline would do for this repo's own apply,
-# run locally: set up the SSH tunnel + kubeconfig this root's Terraform
-# needs, run it, then tear back down whatever this script itself stood
-# up -- so a tunnel this script started doesn't outlive the run, but a
-# tunnel that was already open before it started (e.g. from an
-# unrelated kubectl session) is left alone either way.
-#
-#   scripts/roll-out.sh plan
-#   scripts/roll-out.sh apply
-#
-# Needs, none of which this script sets up on its own:
-# - AWS credentials for the k3s-bootstrap-local IAM identity, in pass
-#   at aws/k3s-bootstrap-local/access-key-id and .../secret-access-key
-#   -- see KandlerLi/terraform-state/README.md's "k3s-bootstrap-local
-#   Identity" section for how those got there in the first place. Also
-#   covers secrets.tf's own AWS Secrets Manager read now (the
-#   SOPS-to-Secrets-Manager cutover) -- no more separate
-#   TF_VAR_github_runner_github_token or dependency on KandlerLi/k3s-apps'
-#   own export-tf-vars.sh for it.
-# - The node's own admin kubeconfig at ~/.kube/k3s-node-1.yaml -- a
-#   one-time `scp` pull, see KandlerLi/k3s-apps' own README.
+# Local plan/apply including the SSH tunnel and kubeconfig check: see README, "Deploy".
 
 set -euo pipefail
 
@@ -79,15 +59,10 @@ cd "${repo_root}"
 terraform init -input=false
 terraform fmt -check -recursive
 terraform validate
-# -input=false on plan/apply too, not just init -- see
-# KandlerLi/repo-infra's own roll-out.sh for why (a missing/unexported
-# required variable otherwise drops into a confusing interactive
-# prompt instead of failing outright).
+# -input=false: fail on a missing variable instead of prompting for it.
 terraform plan -input=false
 
 if [ "${mode}" = "apply" ]; then
-  # Interactive on purpose -- terraform's own plan-and-confirm prompt is
-  # the review step, not -auto-approve. -input=false doesn't affect
-  # that prompt, only variable-value prompts.
+  # Interactive on purpose: terraform's own confirm prompt is the review step.
   terraform apply -input=false
 fi

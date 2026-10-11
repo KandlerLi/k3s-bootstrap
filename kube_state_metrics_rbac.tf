@@ -1,19 +1,4 @@
-# RBAC for kube-state-metrics (KandlerLi/k3s-apps' own
-# modules/node_exporter, which despite the module name also holds
-# kube-state-metrics -- see that module's own main.tf comment for why
-# the two are paired). Same reasoning as dashboard_rbac.tf above:
-# granting RBAC is itself privilege-defining, so the ServiceAccount and
-# its ClusterRoleBinding have to live in this rare/admin root, not in
-# k3s-apps' own CI-applied one. The actual application resources
-# (Deployment, Service) stay in k3s-apps, which only ever references
-# this ServiceAccount by name in a Pod spec -- that alone needs no RBAC
-# grant over the ServiceAccount object itself.
-#
-# Bound to the built-in "view" ClusterRole rather than the upstream
-# bespoke one, plus kube_state_metrics_cluster_read below: "view" only
-# covers namespaced resources, and kube-state-metrics' --resources flag
-# (k3s-apps) also lists nodes, persistentvolumes and namespaces. Secrets
-# stay excluded on both sides.
+# view plus cluster-scoped reads, Secrets excluded: see README, "RBAC".
 
 resource "kubernetes_service_account_v1" "kube_state_metrics" {
   metadata {

@@ -1,11 +1,4 @@
-# One Secret shared by every repository's Deployment below -- it's the
-# same GitHub App credentials either way, not a per-repo credential.
-# app_id isn't itself secret (see its own variable's description), but
-# lives here anyway rather than as a plain Deployment env value --
-# keeping both App credentials in one place matches how they're
-# actually delivered (one JSON blob from AWS Secrets Manager) and
-# means a future App-credential rotation only ever touches one
-# resource.
+# One Secret for every runner: the same GitHub App credentials, rotated in one place.
 resource "kubernetes_secret_v1" "github_runner_token" {
   metadata {
     name = "github-runner-token"

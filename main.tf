@@ -1,18 +1,4 @@
-# This cluster's bootstrap root: the self-hosted GitHub Actions runner
-# itself (privileged almost by definition -- it's the thing CI runs on)
-# plus the cluster-scoped PersistentVolumes (see storage.tf for why).
-# Rare changes, applied locally with the k3s node's own cluster-admin
-# kubeconfig -- see README.md. Originally a second Terraform root
-# nested inside KandlerLi/k3s-apps itself; extracted into this standalone
-# repo (2026-09-03) to actually live alongside its real siblings
-# (repo-infra, terraform-state, both bootstrap-category roots at the
-# time) instead of inside the repo it grants access to -- repo-infra
-# has since moved out to its own github/ directory (2026-09-05),
-# leaving terraform-state as this repo's literal filesystem sibling.
-# Everything else that repo manages (Blocky, ingress,
-# Grafana, home-agent, deluge, open-webui, landing-page, alertmanager)
-# lives in KandlerLi/k3s-apps' own repo root instead, applied via CI with
-# the narrowly-scoped ServiceAccount defined below.
+# Bootstrap root: the runner, cluster-scoped PVs and privilege-defining RBAC. See README.
 
 module "github_runner" {
   source = "./modules/github_runner"
@@ -26,20 +12,7 @@ module "github_runner" {
   }
 }
 
-# The one ServiceAccount KandlerLi/k3s-apps' own CI pipeline runs as --
-# created here, not there, since RBAC is itself privilege-defining and
-# belongs in the rare/admin root, not the one it grants access to.
-# Scoped to exactly the resource types that repo's 8 app modules use in
-# the default namespace; deliberately no persistentvolumes verb at all
-# (see storage.tf's own comment for why that had to live here instead
-# of being grantable by name).
-#
-# One SA for both the PR-time plan job and the production-gated apply
-# job (not a separate narrower plan-only SA) -- terraform plan is
-# inherently read-mostly, and the real write-gate stays the human
-# approval click on the production environment, the same as every
-# other CI-applied repo in this workspace. A stricter two-tier
-# plan/apply SA split is a possible later refinement, not required now.
+# The ServiceAccount k3s-apps' CI runs as: see README, "RBAC".
 resource "kubernetes_service_account_v1" "k3s_apps_ci" {
   metadata {
     name = "k3s-apps-ci"
@@ -56,12 +29,7 @@ resource "kubernetes_role_v1" "k3s_apps_ci" {
     resources  = ["services", "configmaps", "secrets", "persistentvolumeclaims", "endpoints"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
-  # daemonsets added 2026-09-16 for modules/node_exporter's own
-  # kubernetes_daemon_set_v1 -- the first DaemonSet-shaped module in
-  # that repo, so this resource type was never granted before (same
-  # shape as the cronjobs rule below, added for sankey_export's own
-  # first CronJob). Same api_group as deployments, so it's added to
-  # this rule's own resources list rather than a new rule block.
+  # daemonsets: for k3s-apps' node_exporter.
   rule {
     api_groups = ["apps"]
     resources  = ["deployments", "daemonsets"]
@@ -72,12 +40,7 @@ resource "kubernetes_role_v1" "k3s_apps_ci" {
     resources  = ["ingresses"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
-  # Added 2026-09-06 for modules/sankey_export's kubernetes_cron_job_v1 --
-  # the first CronJob-shaped module in that repo, so this API group was
-  # never granted before. Only cronjobs itself: Terraform only ever
-  # manages the CronJob object, never the Jobs/Pods it spawns at
-  # runtime (those are reconciled by the cluster's own CronJob
-  # controller, not by this ServiceAccount).
+  # Only the CronJob objects; their Jobs and Pods belong to the CronJob controller.
   rule {
     api_groups = ["batch"]
     resources  = ["cronjobs"]

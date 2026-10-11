@@ -1,12 +1,4 @@
-# Runner Pods execute whatever a workflow says, inside a privileged
-# dind, in the same namespace and flat Pod network as every app. These
-# policies keep CI code away from the rest of the cluster and the
-# private networks: inbound nothing; outbound DNS, the public internet,
-# and -- only for runners holding a ServiceAccount (k3s-apps) -- the
-# Kubernetes API and Stalwart's management API, both of which that
-# repository's Terraform talks to. Enforced by k3s's embedded
-# network-policy controller. Matched by the per-slot app label, so
-# adding these doesn't roll the runner Pods.
+# Keeps CI code away from the rest of the cluster and private networks: see README, "Runner design".
 
 locals {
   runner_app_labels = [for key in keys(local.github_runner_slots_by_key) : "github-runner-${key}"]
@@ -80,9 +72,7 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
 
     policy_types = ["Egress"]
 
-    # The API server as the Pod sees it after kube-proxy's DNAT (the
-    # server node's own address), plus the ClusterIP in case the
-    # policy is evaluated before translation.
+    # The API server after kube-proxy's DNAT, plus the ClusterIP if evaluated before translation.
     egress {
       to {
         ip_block {

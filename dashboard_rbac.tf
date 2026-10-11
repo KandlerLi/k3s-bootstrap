@@ -1,23 +1,4 @@
-# RBAC for the Kubernetes Dashboard (KandlerLi/k3s-apps' own
-# modules/kubernetes_dashboard), same reasoning as storage.tf above and
-# the k3s_apps_ci Role in main.tf: granting RBAC objects is itself
-# privilege-defining, so the ServiceAccount, its own operational
-# Role/RoleBinding, and the read-only ClusterRoleBinding all have to
-# live in this rare/admin root, not in k3s-apps' own CI-applied one --
-# a CI ServiceAccount that could create ServiceAccounts or
-# (Cluster)RoleBindings could grant itself, or anything it deploys,
-# arbitrary privilege up to and including cluster-admin. The
-# Dashboard's actual application resources (Deployment, Service) stay
-# in k3s-apps, which only ever references this ServiceAccount by name
-# in a Pod spec -- that alone needs no RBAC grant over the
-# ServiceAccount object itself.
-#
-# Read-only, never cluster-admin (the official recommended.yaml
-# default) -- confirmed with Julian. The built-in "view" ClusterRole
-# only covers namespaced resources and excludes Secrets and RBAC, so
-# kubernetes_dashboard_cluster_read below adds read access to
-# cluster-scoped resources and RBAC objects. Secrets stay unreadable
-# on purpose: RBAC can't grant "names but not values".
+# Dashboard RBAC, read-only and never cluster-admin: see README, "RBAC".
 
 resource "kubernetes_service_account_v1" "kubernetes_dashboard" {
   metadata {
@@ -98,14 +79,7 @@ resource "kubernetes_cluster_role_binding_v1" "kubernetes_dashboard_cluster_read
   }
 }
 
-# The Dashboard's own narrow operational permissions -- managing its
-# own key-holder/CSRF Secrets and settings ConfigMap, exactly the scope
-# the official recommended.yaml grants, just namespaced to "default"
-# (this cluster's one namespace) instead of a dedicated
-# kubernetes-dashboard namespace. Both Secrets/the ConfigMap start out
-# nonexistent -- Dashboard creates them itself on first run, hence the
-# separate unscoped "create" rules below (RBAC resourceNames can only
-# restrict verbs against objects that already exist).
+# Its own Secrets and ConfigMap; create can't be name-scoped since they don't exist yet.
 resource "kubernetes_role_v1" "kubernetes_dashboard" {
   metadata {
     name      = "kubernetes-dashboard"
@@ -155,13 +129,7 @@ resource "kubernetes_role_binding_v1" "kubernetes_dashboard" {
   }
 }
 
-# Cluster-wide read access to node/pod resource-usage metrics, feeding
-# the small CPU/Memory numbers on the Dashboard's own Node/Pod/Overview
-# pages -- inert, not an error, if this cluster has no metrics-server
-# actually serving the metrics.k8s.io API. Independent of the
-# metrics-scraper sidecar (the historical usage-graph feature) that
-# KandlerLi/k3s-apps' own modules/kubernetes_dashboard deliberately leaves
-# out of its first cut -- see that module's own main.tf comment.
+# Usage metrics for the Dashboard's CPU/memory numbers; inert without metrics-server.
 resource "kubernetes_cluster_role_v1" "kubernetes_dashboard_metrics" {
   metadata {
     name = "kubernetes-dashboard-metrics"
