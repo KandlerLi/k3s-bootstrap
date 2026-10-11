@@ -1,4 +1,4 @@
-# RBAC for kube-state-metrics (infra/k3s-apps' own
+# RBAC for kube-state-metrics (KandlerLi/k3s-apps' own
 # modules/node_exporter, which despite the module name also holds
 # kube-state-metrics -- see that module's own main.tf comment for why
 # the two are paired). Same reasoning as dashboard_rbac.tf above:

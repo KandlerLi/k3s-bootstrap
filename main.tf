@@ -3,7 +3,7 @@
 # plus the cluster-scoped PersistentVolumes (see storage.tf for why).
 # Rare changes, applied locally with the k3s node's own cluster-admin
 # kubeconfig -- see README.md. Originally a second Terraform root
-# nested inside infra/k3s-apps itself; extracted into this standalone
+# nested inside KandlerLi/k3s-apps itself; extracted into this standalone
 # repo (2026-09-03) to actually live alongside its real siblings
 # (repo-infra, terraform-state, both bootstrap-category roots at the
 # time) instead of inside the repo it grants access to -- repo-infra
@@ -11,7 +11,7 @@
 # leaving terraform-state as this repo's literal filesystem sibling.
 # Everything else that repo manages (Blocky, ingress,
 # Grafana, home-agent, deluge, open-webui, landing-page, alertmanager)
-# lives in infra/k3s-apps' own repo root instead, applied via CI with
+# lives in KandlerLi/k3s-apps' own repo root instead, applied via CI with
 # the narrowly-scoped ServiceAccount defined below.
 
 module "github_runner" {
@@ -26,7 +26,7 @@ module "github_runner" {
   }
 }
 
-# The one ServiceAccount infra/k3s-apps' own CI pipeline runs as --
+# The one ServiceAccount KandlerLi/k3s-apps' own CI pipeline runs as --
 # created here, not there, since RBAC is itself privilege-defining and
 # belongs in the rare/admin root, not the one it grants access to.
 # Scoped to exactly the resource types that repo's 8 app modules use in

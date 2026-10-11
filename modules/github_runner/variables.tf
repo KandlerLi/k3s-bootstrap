@@ -49,7 +49,7 @@ variable "github_runner_owner" {
 
 variable "github_runner_repositories" {
   description = <<-EOT
-    One Deployment per entry. Generated from github/repo-infra's own
+    One Deployment per entry. Generated from KandlerLi/repo-infra's own
     config.yml (every repository with `runner: true`) by home-infra's
     scripts/sync_github_runner_repositories.py, into this repo's own
     repositories.auto.tfvars.json -- Terraform auto-loads that file, so
@@ -134,7 +134,7 @@ variable "github_runner_prune_build_cache_keep_storage" {
 }
 
 variable "github_runner_api_server_ip" {
-  description = "k3s server node address runners with a ServiceAccount reach the Kubernetes API on (port 6443) -- infra/home-infra's k3s_node_vm_ip."
+  description = "k3s server node address runners with a ServiceAccount reach the Kubernetes API on (port 6443) -- KandlerLi/home-infra's k3s_node_vm_ip."
   type        = string
   default     = "192.168.101.10"
 }

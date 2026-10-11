@@ -1,4 +1,4 @@
-# RBAC for the Kubernetes Dashboard (infra/k3s-apps' own
+# RBAC for the Kubernetes Dashboard (KandlerLi/k3s-apps' own
 # modules/kubernetes_dashboard), same reasoning as storage.tf above and
 # the k3s_apps_ci Role in main.tf: granting RBAC objects is itself
 # privilege-defining, so the ServiceAccount, its own operational
@@ -160,7 +160,7 @@ resource "kubernetes_role_binding_v1" "kubernetes_dashboard" {
 # pages -- inert, not an error, if this cluster has no metrics-server
 # actually serving the metrics.k8s.io API. Independent of the
 # metrics-scraper sidecar (the historical usage-graph feature) that
-# infra/k3s-apps' own modules/kubernetes_dashboard deliberately leaves
+# KandlerLi/k3s-apps' own modules/kubernetes_dashboard deliberately leaves
 # out of its first cut -- see that module's own main.tf comment.
 resource "kubernetes_cluster_role_v1" "kubernetes_dashboard_metrics" {
   metadata {
