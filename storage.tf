@@ -1,5 +1,5 @@
 # Statically-provisioned NFS storage, cluster-scoped -- moved here from
-# infra/k3s-apps' own modules/deluge and modules/open_webui (2026-09-03)
+# KandlerLi/k3s-apps' own modules/deluge and modules/open_webui (2026-09-03)
 # specifically because kubernetes_persistent_volume_v1 is the one
 # cluster-scoped resource type either of those modules ever needed.
 # Kubernetes RBAC's resourceNames only constrains get/update/delete on
@@ -8,7 +8,7 @@
 # three PVs" the way it can for every namespaced resource type those
 # modules use. Keeping PVs here instead means that Role never needs any
 # persistentvolumes verb at all. The matching PVC resources stay in
-# infra/k3s-apps' own modules/deluge/modules/open_webui (they're
+# KandlerLi/k3s-apps' own modules/deluge/modules/open_webui (they're
 # namespaced, that Role covers them fine) and reference these PVs by
 # their stable name string instead of a cross-module Terraform
 # attribute, since the two roots have separate state.
@@ -84,13 +84,13 @@ resource "kubernetes_persistent_volume_v1" "deluge_config" {
 # own open-webui container only ever had one bind mount
 # (open_webui_data_dir -> /app/backend/data), covering the sqlite
 # database, WEBUI_SECRET_KEY_FILE, and the HOME subdirectory together.
-# Write target for infra/k3s-apps' own modules/authelia/cronjob.tf --
+# Write target for KandlerLi/k3s-apps' own modules/authelia/cronjob.tf --
 # a *different* PV from Authelia's own real data (authelia_data,
 # local-path/hostPath, defined in that module directly since it's
 # namespace-scoped). This one exists purely so a periodic backup
 # snapshot can leave that node's own disk, landing on the homeserver's
 # real filesystem the same way every other NFS-backed PV here already
-# does. Directory owned by infra/home-infra's own authelia_backup role.
+# does. Directory owned by KandlerLi/home-infra's own authelia_backup role.
 resource "kubernetes_persistent_volume_v1" "authelia_backup" {
   metadata {
     name = "authelia-backup-pv"
@@ -137,7 +137,7 @@ resource "kubernetes_persistent_volume_v1" "open_webui_data" {
 
 # Paperless-ngx (ADR 0023): live documents on the black HDD, and the
 # nightly document_exporter target on the red HDD. Directories owned by
-# infra/home-infra's paperless_storage role.
+# KandlerLi/home-infra's paperless_storage role.
 resource "kubernetes_persistent_volume_v1" "paperless_media" {
   metadata {
     name = "paperless-media-pv"

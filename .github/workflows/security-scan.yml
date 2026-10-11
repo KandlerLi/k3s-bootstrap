@@ -1,7 +1,7 @@
 name: Security scan
 
 # trivy config IaC misconfiguration scan -- first step of the
-# workspace-level security audit (PARKED.md). This is the first GitHub
+# workspace-level security audit. This is the first GitHub
 # Actions workflow in this repo: it deliberately runs on a GitHub-hosted
 # runner (runs_on override below) rather than provisioning a self-hosted
 # one, since this repo otherwise has none by design -- see

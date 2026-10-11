@@ -12,14 +12,14 @@
 # Needs, none of which this script sets up on its own:
 # - AWS credentials for the k3s-bootstrap-local IAM identity, in pass
 #   at aws/k3s-bootstrap-local/access-key-id and .../secret-access-key
-#   -- see bootstrap/terraform-state/README.md's "k3s-bootstrap-local
+#   -- see KandlerLi/terraform-state/README.md's "k3s-bootstrap-local
 #   Identity" section for how those got there in the first place. Also
 #   covers secrets.tf's own AWS Secrets Manager read now (the
-#   SOPS-to-Secrets-Manager cutover, PARKED.md) -- no more separate
-#   TF_VAR_github_runner_github_token or dependency on infra/k3s-apps'
+#   SOPS-to-Secrets-Manager cutover) -- no more separate
+#   TF_VAR_github_runner_github_token or dependency on KandlerLi/k3s-apps'
 #   own export-tf-vars.sh for it.
 # - The node's own admin kubeconfig at ~/.kube/k3s-node-1.yaml -- a
-#   one-time `scp` pull, see infra/k3s-apps' own README.
+#   one-time `scp` pull, see KandlerLi/k3s-apps' own README.
 
 set -euo pipefail
 
@@ -44,13 +44,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(dirname "${script_dir}")"
 
 kubeconfig="${HOME}/.kube/k3s-node-1.yaml"
-[ -f "${kubeconfig}" ] || fail "${kubeconfig} is missing -- one-time setup: see infra/k3s-apps' own README for the scp command that pulls it"
+[ -f "${kubeconfig}" ] || fail "${kubeconfig} is missing -- one-time setup: see KandlerLi/k3s-apps' own README for the scp command that pulls it"
 
 access_key_id="$(pass show aws/k3s-bootstrap-local/access-key-id 2>/dev/null | head -1 || true)"
-[ -n "${access_key_id}" ] || fail "pass entry aws/k3s-bootstrap-local/access-key-id is empty or missing -- see bootstrap/terraform-state/README.md's 'k3s-bootstrap-local Identity' section"
+[ -n "${access_key_id}" ] || fail "pass entry aws/k3s-bootstrap-local/access-key-id is empty or missing -- see KandlerLi/terraform-state/README.md's 'k3s-bootstrap-local Identity' section"
 
 secret_access_key="$(pass show aws/k3s-bootstrap-local/secret-access-key 2>/dev/null | head -1 || true)"
-[ -n "${secret_access_key}" ] || fail "pass entry aws/k3s-bootstrap-local/secret-access-key is empty or missing -- see bootstrap/terraform-state/README.md's 'k3s-bootstrap-local Identity' section"
+[ -n "${secret_access_key}" ] || fail "pass entry aws/k3s-bootstrap-local/secret-access-key is empty or missing -- see KandlerLi/terraform-state/README.md's 'k3s-bootstrap-local Identity' section"
 
 export AWS_ACCESS_KEY_ID="${access_key_id}"
 export AWS_SECRET_ACCESS_KEY="${secret_access_key}"
@@ -80,7 +80,7 @@ terraform init -input=false
 terraform fmt -check -recursive
 terraform validate
 # -input=false on plan/apply too, not just init -- see
-# github/repo-infra's own roll-out.sh for why (a missing/unexported
+# KandlerLi/repo-infra's own roll-out.sh for why (a missing/unexported
 # required variable otherwise drops into a confusing interactive
 # prompt instead of failing outright).
 terraform plan -input=false

@@ -20,7 +20,7 @@
 # Full migration history and every bug found building this (the
 # container: job bind-mount failure, the cross-machine uid mismatch,
 # the auth migration, the disk-growth/pruner story, the capacity
-# tuning): home-infra-docs' history.md ("k3s
+# tuning): KandlerLi/home-infra-docs' history.md ("k3s
 # learning cluster") and decisions.md.
 #
 # Runner image: the community myoung34/github-runner image, not a
@@ -95,7 +95,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
         # The "runner" container's own credentials are
         # env.valueFrom.secretKeyRef, read once at container start and
         # never refreshed -- same class of gap already fixed for
-        # infra/k3s-apps' modules/ingress/modules/alertmanager. This
+        # KandlerLi/k3s-apps' modules/ingress/modules/alertmanager. This
         # checksum makes rotation deterministic: changing the shared
         # Secret's value rolls every one of these Deployments' Pods at
         # once. Hashes the private key specifically, not app_id (which
@@ -285,7 +285,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
           #
           # Memory and CPU limits were each raised twice more after
           # this, against real OOMKills and cgroup-throttling events as
-          # infra/k3s-apps' own Terraform state and provider set grew
+          # KandlerLi/k3s-apps' own Terraform state and provider set grew
           # -- see history.md's "k3s learning cluster" entry for
           # the full tuning history. This for_each's single resource
           # block covers every repo's own runner, so headroom here
@@ -322,7 +322,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
           # Terraform's own provider cache -- see the "dind" container's
           # own identical mount below for why this needs to exist at the
           # same absolute path in both containers, and TF_PLUGIN_CACHE_DIR
-          # in infra/k3s-apps' own checks.yml/apply.yml (this repo's
+          # in KandlerLi/k3s-apps' own checks.yml/apply.yml (this repo's
           # terraform runs directly on this container, no container: job
           # involved) and gha-common's terraform-checks.yml/
           # terraform-apply.yml (bind-mounted into their own container:
@@ -469,7 +469,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
         # root, or unrelated repos' own Terraform providers colliding in
         # one plugin-cache directory. DirectoryOrCreate so the very first
         # run per repo doesn't need either path pre-created by hand --
-        # same pattern infra/k3s-apps' own modules/sankey_export/main.tf
+        # same pattern KandlerLi/k3s-apps' own modules/sankey_export/main.tf
         # already uses for its own single-node hostPath cache.
         volume {
           name = "docker-data"

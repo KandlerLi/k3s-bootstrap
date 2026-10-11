@@ -1,7 +1,7 @@
 # Reads the real GitHub PAT this root's own github_runner module needs
 # directly from AWS Secrets Manager. Replaces the
 # TF_VAR_github_runner_github_token a human used to supply at apply
-# time. Mirrors infra/k3s-apps' own secrets.tf -- see that file's
+# time. Mirrors KandlerLi/k3s-apps' own secrets.tf -- see that file's
 # comment for the fuller pattern rationale (one data source per
 # Secrets Manager group, jsondecode()'d once into a local).
 
