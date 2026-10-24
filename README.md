@@ -80,7 +80,8 @@ root. History and every bug found building it: `home-infra-docs`'
   dockerd's filesystem, not the runner's. So `actions-runner-install`,
   `work` and the Terraform plugin cache are mounted at identical absolute
   paths in both containers, and an init container seeds
-  `actions-runner-install` from the image's own `/actions-runner`.
+  `actions-runner-install` from the image's own `/actions-runner`
+  (see "Caches" for why only once per image).
   `umask 000` ahead of the image's entrypoint keeps files written by one
   container usable by the other (the uid mismatch; it replaced a polling
   `chmod` fixer).
@@ -108,6 +109,19 @@ root. History and every bug found building it: `home-infra-docs`'
   `DirectoryOrCreate`. A `pruner` sidecar regularly prunes unused images
   and build cache so docker-data stays bounded; it only removes what is
   unused, never an in-flight job's data.
+- **Runner install.** `actions-runner-install` (678 MB, ~11,400 files) is
+  a per-slot `host_path` too. As an `emptyDir` it was re-seeded by every
+  new Pod, so after a homeserver reboot all 16 Pods copied it at once
+  onto the HDD-backed VM disk: 30+ minutes without CI, and the IO
+  starved `k3s-node-1` too (Traefik and Authelia down for ~15 minutes on
+  2026-10-24). The init container now copies only when
+  `.seeded-image` doesn't match the runner image, writing the marker
+  last so an interrupted copy is redone; an image bump re-seeds each
+  slot once. Reusing the directory is safe: without
+  `CONFIGURED_ACTIONS_RUNNER_FILES_DIR` the entrypoint deletes `.runner`
+  and re-registers with `--replace` on every start. `_diag` logs older
+  than 7 days are deleted at Pod start, since nothing else bounds them
+  now.
 - **Resources.** The runner container has a writable root filesystem on
   purpose: it is the CI job's working directory. CPU requests stay small
   (10m) while limits allow bursts; the limits were raised against real
