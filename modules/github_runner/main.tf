@@ -9,6 +9,8 @@ locals {
       service_account_name = try(var.github_runner_service_accounts[pair[0].id], null)
     })
   }
+
+  runner_image = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
 }
 
 # default-network-opts sets the MTU for every bridge network, custom ones included: see README, "Runner design".
@@ -73,11 +75,26 @@ resource "kubernetes_deployment_v1" "github_runner" {
           effect   = "NoSchedule"
         }
 
-        # Seeds the shared install volume so both containers see the same files: see README, "Runner design".
+        # Seeds the shared install volume once per image, not per Pod: see README, "Runner design".
         init_container {
-          name    = "seed-runner-install"
-          image   = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
-          command = ["sh", "-c", "cp -a /actions-runner/. /actions-runner-shared/"]
+          name  = "seed-runner-install"
+          image = local.runner_image
+          command = ["sh", "-c", <<-EOT
+            set -e
+            cd /actions-runner-shared
+            if [ "$(cat .seeded-image 2>/dev/null)" != "$RUNNER_IMAGE" ]; then
+              find . -mindepth 1 -delete
+              cp -a /actions-runner/. .
+              echo "$RUNNER_IMAGE" > .seeded-image
+            fi
+            find _diag -type f -mtime +7 -delete 2>/dev/null || true
+          EOT
+          ]
+
+          env {
+            name  = "RUNNER_IMAGE"
+            value = local.runner_image
+          }
 
           volume_mount {
             name       = "actions-runner-install"
@@ -87,7 +104,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
 
         container {
           name  = "runner"
-          image = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
+          image = local.runner_image
 
           # umask 000 prevents the uid mismatch between the two containers: see README, "Runner design".
           command = ["sh", "-c", "umask 000 && exec /entrypoint.sh \"$@\"", "sh"]
@@ -307,7 +324,10 @@ resource "kubernetes_deployment_v1" "github_runner" {
         }
         volume {
           name = "actions-runner-install"
-          empty_dir {}
+          host_path {
+            path = "/var/lib/k3s-github-runner-cache/${each.key}/actions-runner"
+            type = "DirectoryOrCreate"
+          }
         }
         volume {
           name = "work"
