@@ -85,6 +85,14 @@ root. History and every bug found building it: `home-infra-docs`'
   `umask 000` ahead of the image's entrypoint keeps files written by one
   container usable by the other (the uid mismatch; it replaced a polling
   `chmod` fixer).
+- **Waiting for dind.** The runner container runs `docker info` in a loop
+  before the image's entrypoint and only then registers with GitHub (at
+  most 180 s, then it exits and Kubernetes restarts it). Without it, a
+  runner came `online` while dind was still starting under IO load, and
+  the first job failed with `Cannot connect to the Docker daemon`
+  (2026-10-24); dind itself restarted on `timeout waiting for containerd
+  to start` during that window. After a finished job the loop passes
+  immediately, since dind keeps running.
 - **Image and registration.** The community `myoung34/github-runner`
   image, whose registration logic replaces what a persistent systemd
   service needed. GitHub App auth: the entrypoint mints a short-lived
