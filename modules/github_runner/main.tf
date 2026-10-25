@@ -106,8 +106,9 @@ resource "kubernetes_deployment_v1" "github_runner" {
           name  = "runner"
           image = local.runner_image
 
-          # umask 000 prevents the uid mismatch; registers only once dind answers: see README, "Runner design".
+          # Fresh /work per job, umask 000 for the uid mismatch, registers only once dind answers: see README, "Runner design".
           command = ["sh", "-c", <<-EOT
+            find /work -mindepth 1 -delete
             umask 000
             i=0
             until docker info >/dev/null 2>&1; do
