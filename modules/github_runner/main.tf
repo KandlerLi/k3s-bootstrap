@@ -106,9 +106,19 @@ resource "kubernetes_deployment_v1" "github_runner" {
           name  = "runner"
           image = local.runner_image
 
-          # umask 000 prevents the uid mismatch between the two containers: see README, "Runner design".
-          command = ["sh", "-c", "umask 000 && exec /entrypoint.sh \"$@\"", "sh"]
-          args    = ["./bin/Runner.Listener", "run", "--startuptype", "service"]
+          # umask 000 prevents the uid mismatch; registers only once dind answers: see README, "Runner design".
+          command = ["sh", "-c", <<-EOT
+            umask 000
+            i=0
+            until docker info >/dev/null 2>&1; do
+              i=$((i + 1))
+              [ "$i" -lt 180 ] || { echo "dind not ready after 180s" >&2; exit 1; }
+              sleep 1
+            done
+            exec /entrypoint.sh "$@"
+          EOT
+          , "sh"]
+          args = ["./bin/Runner.Listener", "run", "--startuptype", "service"]
 
           # GitHub App auth: the entrypoint mints a short-lived installation token at start.
           env {
