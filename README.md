@@ -102,9 +102,14 @@ root. History and every bug found building it: `home-infra-docs`'
   no workflow needed a change. A checksum annotation of the App's private
   key rolls every runner Pod on rotation, since env from a Secret is only
   read at container start.
-- **Ephemeral.** One job per Pod, then the Deployment starts a fresh one:
-  GitHub's recommended pattern for container runners, and it removes the
-  class of bug where one job's leftover files break the next checkout.
+- **Ephemeral.** One job per runner process: after the job the listener
+  exits and Kubernetes restarts the `runner` container **in the same
+  Pod**, so Pod-lifetime `emptyDir`s survive from job to job. The
+  container's wrapper therefore empties `/work` before every start, so
+  each job begins with no checkouts, tool caches or downloaded actions
+  (`_actions`) from the previous one: no leftover files breaking the
+  next checkout, and no job tampering with code the next job runs.
+  GitHub's recommended pattern for container runners.
   `EPHEMERAL` is set to `true` explicitly, since the entrypoint treats any
   set value, even `false`, as true. The runner never self-updates (bump
   the image instead), never starts its own dockerd (the sidecar owns
