@@ -113,7 +113,7 @@ resource "kubernetes_deployment_v1" "github_runner" {
             i=0
             until docker info >/dev/null 2>&1; do
               i=$((i + 1))
-              [ "$i" -lt 180 ] || { echo "dind not ready after 180s" >&2; exit 1; }
+              [ $((i % 30)) -ne 0 ] || echo "still waiting for dind after $${i}s" >&2
               sleep 1
             done
             exec /entrypoint.sh "$@"
@@ -227,6 +227,19 @@ resource "kubernetes_deployment_v1" "github_runner" {
         container {
           name  = "dind"
           image = "docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07"
+
+          # Unix socket only, and dockerd retried in place instead of via CrashLoopBackOff: see README, "Runner design".
+          command = ["sh", "-c", <<-EOT
+            trap 'kill -TERM "$child" 2>/dev/null; wait "$child"; exit 0' TERM INT
+            while true; do
+              dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock &
+              child=$!
+              wait "$child"
+              echo "dockerd exited with $?, retrying in 5s" >&2
+              sleep 5
+            done
+          EOT
+          ]
 
           env {
             name  = "DOCKER_TLS_CERTDIR"

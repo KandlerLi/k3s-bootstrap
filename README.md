@@ -69,8 +69,13 @@ root. History and every bug found building it: `home-infra-docs`'
   kaniko/rootless, so every repository's `docker build`/`docker run`
   steps work unmodified. A privileged container can escape to its node;
   that is accepted because `k3s-node-2` runs nothing else. The runner
-  reaches dockerd over a shared Unix socket volume: dind's entrypoint
-  opens no TCP listener just because `DOCKER_TLS_CERTDIR=""` is set.
+  reaches dockerd over a shared Unix socket volume, and dockerd listens
+  on nothing else: dind is started as `dockerd
+  --host=unix:///var/run/docker.sock`. Started without arguments, as
+  before 2026-10-25, the image's entrypoint adds an unauthenticated
+  `--host=tcp://0.0.0.0:2375` whenever `DOCKER_TLS_CERTDIR=""`, and
+  dockerd then sleeps 15 s on purpose to warn about it; only the
+  NetworkPolicy kept other Pods off that port.
 - **MTU.** The Pod network's MTU is 1450. dockerd's bridge networks
   default to 1500, which silently black-holed response bodies of
   `container:` job steps. `daemon.json` sets `"mtu": 1450` and, via
@@ -86,13 +91,21 @@ root. History and every bug found building it: `home-infra-docs`'
   container usable by the other (the uid mismatch; it replaced a polling
   `chmod` fixer).
 - **Waiting for dind.** The runner container runs `docker info` in a loop
-  before the image's entrypoint and only then registers with GitHub (at
-  most 180 s, then it exits and Kubernetes restarts it). Without it, a
-  runner came `online` while dind was still starting under IO load, and
-  the first job failed with `Cannot connect to the Docker daemon`
-  (2026-10-24); dind itself restarted on `timeout waiting for containerd
-  to start` during that window. After a finished job the loop passes
-  immediately, since dind keeps running.
+  before the image's entrypoint and only then registers with GitHub, with
+  no time limit. Without it, a runner came `online` while dind was still
+  starting under IO load, and the first job failed with `Cannot connect
+  to the Docker daemon` (2026-10-24). After a finished job the loop
+  passes immediately, since dind keeps running.
+- **dind retries in place.** Under the IO load after a homeserver reboot,
+  dockerd gives up on its managed containerd after 15 s (`timeout
+  waiting for containerd to start`). Left to Kubernetes, every such exit
+  restarted the dind container with growing CrashLoopBackOff delays; on
+  2026-10-25 that, plus an earlier 180 s limit in the runner's wait,
+  kept runners offline for 40 minutes after a reboot. The dind container
+  now runs dockerd in a shell loop that retries after 5 s; the
+  containerd it already started keeps running, so a later attempt finds
+  it ready. The loop forwards SIGTERM to dockerd, so Pod shutdown stays
+  clean.
 - **Image and registration.** The community `myoung34/github-runner`
   image, whose registration logic replaces what a persistent systemd
   service needed. GitHub App auth: the entrypoint mints a short-lived
