@@ -60,9 +60,9 @@ terraform init -input=false
 terraform fmt -check -recursive
 terraform validate
 # -input=false: fail on a missing variable instead of prompting for it.
-terraform plan -input=false
-
-if [ "${mode}" = "apply" ]; then
-  # Interactive on purpose: terraform's own confirm prompt is the review step.
+if [ "${mode}" = "plan" ]; then
+  terraform plan -input=false
+else
+  # Interactive on purpose: apply prints the plan itself and its confirm prompt is the review step.
   terraform apply -input=false
 fi
