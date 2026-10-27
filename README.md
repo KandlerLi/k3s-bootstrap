@@ -195,8 +195,9 @@ separate state.
 
 ## Namespaces
 
-The runners live in `ci`, everything else so far in `default`
-(tracker #32 moves the apps in groups later). `ci` exists for two
+The runners live in `ci`; Grafana, Alertmanager and kube-state-metrics
+in `monitoring`; node-exporter in `node-exporter`; the other apps so far
+in `default` (tracker #32 moves them in groups). `ci` exists for two
 boundaries:
 
 - **RBAC:** `k3s-apps-ci`'s Role is namespaced to `default`, so it can't
