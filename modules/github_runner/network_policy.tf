@@ -134,8 +134,13 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
     }
     egress {
       to {
+        # default until k3s-apps has moved Grafana to monitoring; then monitoring only.
         namespace_selector {
-          match_labels = { "kubernetes.io/metadata.name" = "default" }
+          match_expressions {
+            key      = "kubernetes.io/metadata.name"
+            operator = "In"
+            values   = ["default", "monitoring"]
+          }
         }
         pod_selector {
           match_labels = { app = "grafana" }
