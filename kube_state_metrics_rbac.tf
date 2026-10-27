@@ -7,14 +7,6 @@ resource "kubernetes_service_account_v1" "kube_state_metrics_monitoring" {
   }
 }
 
-# The Deployment's old identity until k3s-apps has moved it to monitoring; removed afterwards.
-resource "kubernetes_service_account_v1" "kube_state_metrics" {
-  metadata {
-    name      = "kube-state-metrics"
-    namespace = "default"
-  }
-}
-
 resource "kubernetes_cluster_role_binding_v1" "kube_state_metrics_view" {
   metadata {
     name = "kube-state-metrics-view"
@@ -30,12 +22,6 @@ resource "kubernetes_cluster_role_binding_v1" "kube_state_metrics_view" {
     kind      = "ServiceAccount"
     name      = kubernetes_service_account_v1.kube_state_metrics_monitoring.metadata[0].name
     namespace = kubernetes_service_account_v1.kube_state_metrics_monitoring.metadata[0].namespace
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = kubernetes_service_account_v1.kube_state_metrics.metadata[0].name
-    namespace = "default"
   }
 }
 
@@ -66,11 +52,5 @@ resource "kubernetes_cluster_role_binding_v1" "kube_state_metrics_cluster_read" 
     kind      = "ServiceAccount"
     name      = kubernetes_service_account_v1.kube_state_metrics_monitoring.metadata[0].name
     namespace = kubernetes_service_account_v1.kube_state_metrics_monitoring.metadata[0].namespace
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = kubernetes_service_account_v1.kube_state_metrics.metadata[0].name
-    namespace = "default"
   }
 }
