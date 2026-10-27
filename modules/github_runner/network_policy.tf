@@ -100,13 +100,8 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
 
     egress {
       to {
-        # default until k3s-apps has moved its apps; then apps only.
         namespace_selector {
-          match_expressions {
-            key      = "kubernetes.io/metadata.name"
-            operator = "In"
-            values   = ["default", "apps"]
-          }
+          match_labels = { "kubernetes.io/metadata.name" = "apps" }
         }
         pod_selector {
           match_labels = { app = "stalwart" }
@@ -121,13 +116,8 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
     # k3s-apps' Blocky password rotation: ALTER USER on Postgres, then health checks on Blocky and Grafana.
     egress {
       to {
-        # default until k3s-apps has moved its apps; then apps only.
         namespace_selector {
-          match_expressions {
-            key      = "kubernetes.io/metadata.name"
-            operator = "In"
-            values   = ["default", "apps"]
-          }
+          match_labels = { "kubernetes.io/metadata.name" = "apps" }
         }
         pod_selector {
           match_labels = { app = "blocky" }

@@ -68,7 +68,7 @@ module "github_runner" {
 }
 
 # The ServiceAccount k3s-apps' CI runs as: see README, "RBAC".
-# In ci next to its runner Pod; its Role stays in default, where the apps live.
+# In ci next to its runner Pod; its Roles live in the app namespaces.
 resource "kubernetes_service_account_v1" "k3s_apps_ci" {
   metadata {
     name      = "k3s-apps-ci"
@@ -76,52 +76,7 @@ resource "kubernetes_service_account_v1" "k3s_apps_ci" {
   }
 }
 
-resource "kubernetes_role_v1" "k3s_apps_ci" {
-  metadata {
-    name = "k3s-apps-ci"
-  }
 
-  rule {
-    api_groups = [""]
-    resources  = ["services", "configmaps", "secrets", "persistentvolumeclaims", "endpoints"]
-    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
-  }
-  # daemonsets: for k3s-apps' node_exporter.
-  rule {
-    api_groups = ["apps"]
-    resources  = ["deployments", "daemonsets"]
-    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
-  }
-  rule {
-    api_groups = ["networking.k8s.io"]
-    resources  = ["ingresses"]
-    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
-  }
-  # Only the CronJob objects; their Jobs and Pods belong to the CronJob controller.
-  rule {
-    api_groups = ["batch"]
-    resources  = ["cronjobs"]
-    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
-  }
-}
-
-resource "kubernetes_role_binding_v1" "k3s_apps_ci" {
-  metadata {
-    name = "k3s-apps-ci"
-  }
-
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "Role"
-    name      = kubernetes_role_v1.k3s_apps_ci.metadata[0].name
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
-    namespace = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].namespace
-  }
-}
 
 # k3s-apps' node_exporter module only needs its DaemonSet in that namespace.
 resource "kubernetes_role_v1" "k3s_apps_ci_node_exporter" {
@@ -237,7 +192,7 @@ resource "kubernetes_role_binding_v1" "k3s_apps_ci_auth" {
   }
 }
 
-# The apps' Role, the same kinds as the default one it replaces.
+# What k3s-apps' remaining modules create in apps.
 resource "kubernetes_role_v1" "k3s_apps_ci_apps" {
   metadata {
     name      = "k3s-apps-ci"
