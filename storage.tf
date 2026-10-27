@@ -133,3 +133,39 @@ resource "kubernetes_persistent_volume_v1" "paperless_export" {
     }
   }
 }
+
+# sankey-export's state on k3s-node-1's disk. A PV, so the Pod itself has no hostPath volume (PSA baseline).
+resource "kubernetes_persistent_volume_v1" "sankey_export_state" {
+  metadata {
+    name = "sankey-export-state-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "1Gi"
+    }
+    access_modes                     = ["ReadWriteOnce"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      host_path {
+        path = "/var/lib/k3s-sankey-export"
+        type = "Directory"
+      }
+    }
+
+    # The data lives on this node only.
+    node_affinity {
+      required {
+        node_selector_term {
+          match_expressions {
+            key      = "kubernetes.io/hostname"
+            operator = "In"
+            values   = ["k3s-node-1"]
+          }
+        }
+      }
+    }
+  }
+}
