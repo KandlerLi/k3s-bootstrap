@@ -20,6 +20,17 @@ resource "kubernetes_namespace_v1" "node_exporter" {
   }
 }
 
+# Grafana, Alertmanager and kube-state-metrics: see README, "Namespaces".
+resource "kubernetes_namespace_v1" "monitoring" {
+  metadata {
+    name = "monitoring"
+    labels = {
+      "pod-security.kubernetes.io/enforce" = "baseline"
+      "pod-security.kubernetes.io/warn"    = "restricted"
+    }
+  }
+}
+
 module "github_runner" {
   source = "./modules/github_runner"
 
@@ -114,6 +125,44 @@ resource "kubernetes_role_binding_v1" "k3s_apps_ci_node_exporter" {
     api_group = "rbac.authorization.k8s.io"
     kind      = "Role"
     name      = kubernetes_role_v1.k3s_apps_ci_node_exporter.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
+    namespace = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].namespace
+  }
+}
+
+# What k3s-apps' grafana, alertmanager and kube-state-metrics need in monitoring.
+resource "kubernetes_role_v1" "k3s_apps_ci_monitoring" {
+  metadata {
+    name      = "k3s-apps-ci"
+    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["services", "configmaps", "secrets"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  rule {
+    api_groups = ["apps"]
+    resources  = ["deployments"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+}
+
+resource "kubernetes_role_binding_v1" "k3s_apps_ci_monitoring" {
+  metadata {
+    name      = "k3s-apps-ci"
+    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.k3s_apps_ci_monitoring.metadata[0].name
   }
 
   subject {

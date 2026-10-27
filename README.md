@@ -212,6 +212,13 @@ boundaries:
 The runners' host-path caches are keyed by slot, not namespace, so they
 survive a namespace move.
 
+`monitoring` holds Grafana, Alertmanager and kube-state-metrics:
+`enforce: baseline`, `warn: restricted` to show what `restricted` would
+still reject. `k3s-apps-ci` gets a Role there for exactly the kinds those
+modules create. Prometheus reaches Alertmanager and kube-state-metrics
+through ServiceLB on the node's address, so the namespace doesn't
+change its targets.
+
 `node-exporter` holds only k3s-apps' node-exporter DaemonSet, which needs
 the host's network, PID namespace and root filesystem; it is labelled
 `enforce: privileged` like `ci`. `k3s-apps-ci` gets a Role there for
