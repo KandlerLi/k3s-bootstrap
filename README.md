@@ -204,12 +204,12 @@ separate state.
 ## Namespaces
 
 The runners live in `ci`; Grafana, Alertmanager and kube-state-metrics
-in `monitoring`; node-exporter in `node-exporter`; the other apps so far
-in `default` (tracker #32 moves them in groups). `ci` exists for two
-boundaries:
+in `monitoring`; Authelia in `auth`; node-exporter in `node-exporter`;
+every other k3s-apps workload in `apps` (tracker #32). `default` holds
+no workloads. `ci` exists for two boundaries:
 
-- **RBAC:** `k3s-apps-ci`'s Role is namespaced to `default`, so it can't
-  reach the runner Deployments or the GitHub App key in
+- **RBAC:** `k3s-apps-ci` has Roles only in the app namespaces, so it
+  can't reach the runner Deployments or the GitHub App key in
   `github-runner-token`, which registers runners for every repository.
 - **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
   since `dind` needs `privileged: true`. As the other namespaces get
@@ -248,10 +248,10 @@ here, while `k3s-apps` only references them by name in Pod specs.
 - **`k3s-apps-ci`** (`main.tf`) is the ServiceAccount `k3s-apps`' CI runs
   as, for both plan and apply: plan is read-mostly, and the write gate is
   the human PR review and merge. It lives in `ci` next to its runner
-  Pod; its Role and RoleBinding live in `default`, where the apps are. Its Role covers exactly the resource
-  types `k3s-apps`' modules use, extended as new kinds arrive
-  (`daemonsets`, `cronjobs`); for CronJobs only the CronJob objects,
-  since their Jobs and Pods belong to the CronJob controller.
+  Pod. It has one Role per app namespace (`apps`, `auth`, `monitoring`,
+  `node-exporter`), each covering exactly the kinds that namespace's
+  modules create; for CronJobs only the CronJob objects, since their
+  Jobs and Pods belong to the CronJob controller.
 - **Kubernetes Dashboard** (`dashboard_rbac.tf`): read-only, never the
   upstream default of cluster-admin. The built-in `view` ClusterRole
   covers namespaced resources but not cluster-scoped ones or RBAC, so a
