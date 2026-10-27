@@ -200,7 +200,8 @@ boundaries:
   `github-runner-token`, which registers runners for every repository.
 - **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
   since `dind` needs `privileged: true`. As the other namespaces get
-  `baseline`, `ci` stays the only place a privileged Pod can run.
+  `baseline`, `ci` and `node-exporter` stay the only places a privileged
+  Pod can run.
   `default` enforces `baseline` (`psa.tf`); `kube-system` stays
   unlabelled, k3s' own components need it.
 
