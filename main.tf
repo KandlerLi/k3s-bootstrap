@@ -1,7 +1,19 @@
 # Bootstrap root: the runner, cluster-scoped PVs and privilege-defining RBAC. See README.
 
+# The runners' own namespace, the only one where privileged Pods (dind) are intended: see README, "Namespaces".
+resource "kubernetes_namespace_v1" "ci" {
+  metadata {
+    name = "ci"
+    labels = {
+      "pod-security.kubernetes.io/enforce" = "privileged"
+    }
+  }
+}
+
 module "github_runner" {
   source = "./modules/github_runner"
+
+  namespace = kubernetes_namespace_v1.ci.metadata[0].name
 
   github_runner_app_id          = local.home_infra_github_runner["app_id"]
   github_runner_app_private_key = local.home_infra_github_runner["app_private_key"]
@@ -13,9 +25,11 @@ module "github_runner" {
 }
 
 # The ServiceAccount k3s-apps' CI runs as: see README, "RBAC".
+# In ci next to its runner Pod; its Role stays in default, where the apps live.
 resource "kubernetes_service_account_v1" "k3s_apps_ci" {
   metadata {
-    name = "k3s-apps-ci"
+    name      = "k3s-apps-ci"
+    namespace = kubernetes_namespace_v1.ci.metadata[0].name
   }
 }
 
@@ -62,6 +76,6 @@ resource "kubernetes_role_binding_v1" "k3s_apps_ci" {
   subject {
     kind      = "ServiceAccount"
     name      = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
-    namespace = "default"
+    namespace = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].namespace
   }
 }

@@ -189,6 +189,22 @@ separate state.
   (ADR 0023) hold live documents on the black HDD and nightly exports on
   the red HDD. The directories are owned by `home-infra` roles.
 
+## Namespaces
+
+The runners live in `ci`, everything else so far in `default`
+(tracker #32 moves the apps in groups later). `ci` exists for two
+boundaries:
+
+- **RBAC:** `k3s-apps-ci`'s Role is namespaced to `default`, so it can't
+  reach the runner Deployments or the GitHub App key in
+  `github-runner-token`, which registers runners for every repository.
+- **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
+  since `dind` needs `privileged: true`. Once the other namespaces get
+  `baseline`, `ci` stays the only place a privileged Pod can run.
+
+The runners' host-path caches are keyed by slot, not namespace, so they
+survive a namespace move.
+
 ## RBAC
 
 Granting RBAC is itself privilege-defining: a CI ServiceAccount that
@@ -198,7 +214,8 @@ here, while `k3s-apps` only references them by name in Pod specs.
 
 - **`k3s-apps-ci`** (`main.tf`) is the ServiceAccount `k3s-apps`' CI runs
   as, for both plan and apply: plan is read-mostly, and the write gate is
-  the human PR review and merge. Its Role covers exactly the resource
+  the human PR review and merge. It lives in `ci` next to its runner
+  Pod; its Role and RoleBinding live in `default`, where the apps are. Its Role covers exactly the resource
   types `k3s-apps`' modules use, extended as new kinds arrive
   (`daemonsets`, `cronjobs`); for CronJobs only the CronJob objects,
   since their Jobs and Pods belong to the CronJob controller.

@@ -37,6 +37,11 @@ variable "github_runner_app_private_key" {
   sensitive   = true
 }
 
+variable "namespace" {
+  description = "Namespace for every runner object; k3s-apps' ServiceAccount must live there too."
+  type        = string
+}
+
 variable "github_runner_owner" {
   description = <<-EOT
     The GitHub account every repository in

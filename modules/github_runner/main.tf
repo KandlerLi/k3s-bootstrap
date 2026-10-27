@@ -16,7 +16,8 @@ locals {
 # default-network-opts sets the MTU for every bridge network, custom ones included: see README, "Runner design".
 resource "kubernetes_config_map_v1" "github_runner_dind_daemon_config" {
   metadata {
-    name = "github-runner-dind-daemon-config"
+    name      = "github-runner-dind-daemon-config"
+    namespace = var.namespace
   }
 
   data = {
@@ -35,7 +36,8 @@ resource "kubernetes_deployment_v1" "github_runner" {
   for_each = local.github_runner_slots_by_key
 
   metadata {
-    name = "github-runner-${each.key}"
+    name      = "github-runner-${each.key}"
+    namespace = var.namespace
   }
 
   spec {
