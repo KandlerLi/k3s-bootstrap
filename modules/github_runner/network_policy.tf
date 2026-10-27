@@ -10,7 +10,8 @@ locals {
 
 resource "kubernetes_network_policy_v1" "github_runner_isolation" {
   metadata {
-    name = "github-runner-isolation"
+    name      = "github-runner-isolation"
+    namespace = var.namespace
   }
 
   spec {
@@ -58,7 +59,8 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
   count = length(local.cluster_access_runner_app_labels) > 0 ? 1 : 0
 
   metadata {
-    name = "github-runner-cluster-access"
+    name      = "github-runner-cluster-access"
+    namespace = var.namespace
   }
 
   spec {
@@ -98,6 +100,9 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
 
     egress {
       to {
+        namespace_selector {
+          match_labels = { "kubernetes.io/metadata.name" = "default" }
+        }
         pod_selector {
           match_labels = { app = "stalwart" }
         }
@@ -105,6 +110,40 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
       ports {
         protocol = "TCP"
         port     = "8080"
+      }
+    }
+
+    # k3s-apps' Blocky password rotation: ALTER USER on Postgres, then health checks on Blocky and Grafana.
+    egress {
+      to {
+        namespace_selector {
+          match_labels = { "kubernetes.io/metadata.name" = "default" }
+        }
+        pod_selector {
+          match_labels = { app = "blocky" }
+        }
+      }
+      ports {
+        protocol = "TCP"
+        port     = "5432"
+      }
+      ports {
+        protocol = "TCP"
+        port     = "4000"
+      }
+    }
+    egress {
+      to {
+        namespace_selector {
+          match_labels = { "kubernetes.io/metadata.name" = "default" }
+        }
+        pod_selector {
+          match_labels = { app = "grafana" }
+        }
+      }
+      ports {
+        protocol = "TCP"
+        port     = "3000"
       }
     }
   }

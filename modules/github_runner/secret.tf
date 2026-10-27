@@ -1,7 +1,8 @@
 # One Secret for every runner: the same GitHub App credentials, rotated in one place.
 resource "kubernetes_secret_v1" "github_runner_token" {
   metadata {
-    name = "github-runner-token"
+    name      = "github-runner-token"
+    namespace = var.namespace
   }
 
   data = {
