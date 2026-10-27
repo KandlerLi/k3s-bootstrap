@@ -188,6 +188,14 @@ separate state.
   directory on `k3s-node-1`, pinned there by node affinity. Through a
   PV the Pod mounts a PVC, which PSA `baseline` allows, and the
   directory stays where it was.
+- `apps_host_path` are the six volumes that were dynamic local-path
+  claims (`reclaimPolicy: Delete`) until the move to `apps`: Blocky's
+  and Paperless' Postgres, Paperless' data, Bulwark, Traefik's ACME
+  store and Stalwart's mail. Host paths under `/var/lib/k3s-apps-data`
+  on `k3s-node-1`, `Retain`, so deleting a claim never deletes data.
+- Every PV here carries a `claim_ref` naming its claim's namespace: a
+  `Retain` PV released by a deleted claim only binds again to the claim
+  its `claimRef` names.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
@@ -220,10 +228,10 @@ modules create. Prometheus reaches Alertmanager and kube-state-metrics
 through ServiceLB on the node's address, so the namespace doesn't
 change its targets.
 
-`auth` holds Authelia (`enforce: baseline`, `warn: restricted`). Its
-NFS backup PV is pre-bound to `auth/authelia-backup` via `claim_ref`:
-a `Retain` PV released by a deleted claim only binds again to the claim
-its `claimRef` names.
+`auth` holds Authelia, `apps` every other k3s-apps workload, Traefik
+included (both `enforce: baseline`, `warn: restricted`). `k3s-apps-ci`
+has a Role in each with only the kinds its modules create, and so does
+the Kubernetes Dashboard's ServiceAccount, which lives in `apps`.
 
 `node-exporter` holds only k3s-apps' node-exporter DaemonSet, which needs
 the host's network, PID namespace and root filesystem; it is labelled

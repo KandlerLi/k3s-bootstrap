@@ -42,6 +42,17 @@ resource "kubernetes_namespace_v1" "auth" {
   }
 }
 
+# Every remaining k3s-apps workload, Traefik included: see README, "Namespaces".
+resource "kubernetes_namespace_v1" "apps" {
+  metadata {
+    name = "apps"
+    labels = {
+      "pod-security.kubernetes.io/enforce" = "baseline"
+      "pod-security.kubernetes.io/warn"    = "restricted"
+    }
+  }
+}
+
 module "github_runner" {
   source = "./modules/github_runner"
 
@@ -217,6 +228,55 @@ resource "kubernetes_role_binding_v1" "k3s_apps_ci_auth" {
     api_group = "rbac.authorization.k8s.io"
     kind      = "Role"
     name      = kubernetes_role_v1.k3s_apps_ci_auth.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
+    namespace = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].namespace
+  }
+}
+
+# The apps' Role, the same kinds as the default one it replaces.
+resource "kubernetes_role_v1" "k3s_apps_ci_apps" {
+  metadata {
+    name      = "k3s-apps-ci"
+    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["services", "configmaps", "secrets", "persistentvolumeclaims", "endpoints"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  rule {
+    api_groups = ["apps"]
+    resources  = ["deployments"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  rule {
+    api_groups = ["networking.k8s.io"]
+    resources  = ["ingresses"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  # Only the CronJob objects; their Jobs and Pods belong to the CronJob controller.
+  rule {
+    api_groups = ["batch"]
+    resources  = ["cronjobs"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+}
+
+resource "kubernetes_role_binding_v1" "k3s_apps_ci_apps" {
+  metadata {
+    name      = "k3s-apps-ci"
+    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.k3s_apps_ci_apps.metadata[0].name
   }
 
   subject {

@@ -19,6 +19,11 @@ resource "kubernetes_persistent_volume_v1" "deluge_downloads" {
         path   = "/mnt/black-hdd/downloads"
       }
     }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "deluge-downloads"
+    }
   }
 }
 
@@ -40,6 +45,11 @@ resource "kubernetes_persistent_volume_v1" "deluge_config" {
         server = "192.168.101.1"
         path   = "/mnt/black-hdd/deluge-config"
       }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "deluge-config"
     }
   }
 }
@@ -92,6 +102,11 @@ resource "kubernetes_persistent_volume_v1" "open_webui_data" {
         path   = "/var/lib/open-webui"
       }
     }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "open-webui-data"
+    }
   }
 }
 
@@ -115,6 +130,11 @@ resource "kubernetes_persistent_volume_v1" "paperless_media" {
         path   = "/mnt/black-hdd/paperless-media"
       }
     }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "paperless-media"
+    }
   }
 }
 
@@ -136,6 +156,11 @@ resource "kubernetes_persistent_volume_v1" "paperless_export" {
         server = "192.168.101.1"
         path   = "/mnt/red-hdd/paperless-export"
       }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "paperless-export"
     }
   }
 }
@@ -162,6 +187,64 @@ resource "kubernetes_persistent_volume_v1" "sankey_export_state" {
     }
 
     # The data lives on this node only.
+    node_affinity {
+      required {
+        node_selector_term {
+          match_expressions {
+            key      = "kubernetes.io/hostname"
+            operator = "In"
+            values   = ["k3s-node-1"]
+          }
+        }
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "sankey-export-state"
+    }
+  }
+}
+
+# Formerly dynamic local-path volumes (reclaim Delete); static and Retain since the move to apps. See README, "Storage".
+locals {
+  apps_host_path_volumes = {
+    blocky-postgres    = "256Mi"
+    bulwark            = "1Gi"
+    ingress-acme       = "128Mi"
+    paperless-data     = "5Gi"
+    paperless-postgres = "2Gi"
+    stalwart           = "5Gi"
+  }
+}
+
+resource "kubernetes_persistent_volume_v1" "apps_host_path" {
+  for_each = local.apps_host_path_volumes
+
+  metadata {
+    name = "${each.key}-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = each.value
+    }
+    access_modes                     = ["ReadWriteOnce"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      host_path {
+        path = "/var/lib/k3s-apps-data/${each.key}"
+        type = "DirectoryOrCreate"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = each.key
+    }
+
     node_affinity {
       required {
         node_selector_term {
