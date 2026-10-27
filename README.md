@@ -218,8 +218,8 @@ here, while `k3s-apps` only references them by name in Pod specs.
   kubelet's `/metrics/cadvisor`. Never `nodes/proxy`, which also allows
   exec into every Pod. Prometheus runs outside the cluster, so the token
   is a long-lived ServiceAccount token Secret, copied once into Secrets
-  Manager (`home-infra/monitoring`, see its runbook). To rotate it,
-  apply with `-replace=kubernetes_secret_v1.prometheus_kubelet_token`
+  Manager (`home-infra/prometheus`, see its runbook). To rotate it,
+  `scripts/roll-out.sh apply -replace=kubernetes_secret_v1.prometheus_kubelet_token`
   and copy the new token.
 
 ## State
