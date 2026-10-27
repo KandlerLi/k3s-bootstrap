@@ -184,6 +184,10 @@ separate state.
 - `reclaim_policy = "Retain"` everywhere: these PVs point at real,
   existing data, and deleting a PVC must never touch the files.
 - Capacities are nominal: NFS has no Kubernetes-visible quota.
+- `sankey_export_state` is the one host-path PV: the CronJob's state
+  directory on `k3s-node-1`, pinned there by node affinity. Through a
+  PV the Pod mounts a PVC, which PSA `baseline` allows, and the
+  directory stays where it was.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
@@ -204,6 +208,11 @@ boundaries:
 
 The runners' host-path caches are keyed by slot, not namespace, so they
 survive a namespace move.
+
+`node-exporter` holds only k3s-apps' node-exporter DaemonSet, which needs
+the host's network, PID namespace and root filesystem; it is labelled
+`enforce: privileged` like `ci`. `k3s-apps-ci` gets a Role there for
+DaemonSets only.
 
 ## RBAC
 
