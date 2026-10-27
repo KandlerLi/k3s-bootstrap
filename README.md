@@ -213,6 +213,14 @@ here, while `k3s-apps` only references them by name in Pod specs.
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
   `--resources` list includes; Secrets excluded.
+- **`prometheus-kubelet`** (`kubelet_metrics_rbac.tf`): `get` on
+  `nodes/metrics` only, for the homeserver's Prometheus scraping each
+  kubelet's `/metrics/cadvisor`. Never `nodes/proxy`, which also allows
+  exec into every Pod. Prometheus runs outside the cluster, so the token
+  is a long-lived ServiceAccount token Secret, copied once into Secrets
+  Manager (`home-infra/monitoring`, see its runbook). To rotate it,
+  apply with `-replace=kubernetes_secret_v1.prometheus_kubelet_token`
+  and copy the new token.
 
 ## State
 
