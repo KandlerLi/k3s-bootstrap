@@ -4,12 +4,13 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $(basename "$0") plan|apply" >&2
+  echo "usage: $(basename "$0") plan|apply [terraform args, e.g. -replace=ADDRESS]" >&2
   exit 1
 }
 
-[ $# -eq 1 ] || usage
+[ $# -ge 1 ] || usage
 mode="$1"
+shift
 case "$mode" in
   plan | apply) ;;
   *) usage ;;
@@ -61,8 +62,8 @@ terraform fmt -check -recursive
 terraform validate
 # -input=false: fail on a missing variable instead of prompting for it.
 if [ "${mode}" = "plan" ]; then
-  terraform plan -input=false
+  terraform plan -input=false "$@"
 else
   # Interactive on purpose: apply prints the plan itself and its confirm prompt is the review step.
-  terraform apply -input=false
+  terraform apply -input=false "$@"
 fi
