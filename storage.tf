@@ -64,6 +64,12 @@ resource "kubernetes_persistent_volume_v1" "authelia_backup" {
         path   = "/mnt/red-hdd/authelia-backup"
       }
     }
+
+    # Pre-bound to the claim in auth, so a Retain PV released by its old default claim binds again.
+    claim_ref {
+      namespace = "auth"
+      name      = "authelia-backup"
+    }
   }
 }
 

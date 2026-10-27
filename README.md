@@ -220,6 +220,11 @@ modules create. Prometheus reaches Alertmanager and kube-state-metrics
 through ServiceLB on the node's address, so the namespace doesn't
 change its targets.
 
+`auth` holds Authelia (`enforce: baseline`, `warn: restricted`). Its
+NFS backup PV is pre-bound to `auth/authelia-backup` via `claim_ref`:
+a `Retain` PV released by a deleted claim only binds again to the claim
+its `claimRef` names.
+
 `node-exporter` holds only k3s-apps' node-exporter DaemonSet, which needs
 the host's network, PID namespace and root filesystem; it is labelled
 `enforce: privileged` like `ci`. `k3s-apps-ci` gets a Role there for
