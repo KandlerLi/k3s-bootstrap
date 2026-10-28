@@ -83,6 +83,34 @@ resource "kubernetes_persistent_volume_v1" "authelia_backup" {
   }
 }
 
+# Target of k3s-apps' Stalwart backup CronJob, on the homeserver's red HDD.
+resource "kubernetes_persistent_volume_v1" "stalwart_backup" {
+  metadata {
+    name = "stalwart-backup-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "20Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/stalwart-backup"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "stalwart-backup"
+    }
+  }
+}
+
 resource "kubernetes_persistent_volume_v1" "open_webui_data" {
   metadata {
     name = "open-webui-data-pv"

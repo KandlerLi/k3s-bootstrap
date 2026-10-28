@@ -196,6 +196,8 @@ separate state.
 - Every PV here carries a `claim_ref` naming its claim's namespace: a
   `Retain` PV released by a deleted claim only binds again to the claim
   its `claimRef` names.
+- `stalwart_backup` is the write target of `k3s-apps`' Stalwart backup
+  CronJob on the red HDD.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
@@ -260,6 +262,11 @@ here, while `k3s-apps` only references them by name in Pod specs.
   its own key-holder/CSRF Secrets and settings ConfigMap, with unscoped
   `create` rules because those objects don't exist before its first run.
   Node/Pod usage metrics are readable too, inert without metrics-server.
+- **`stalwart-backup`** (`stalwart_backup_rbac.tf`): `get`/`patch` on
+  `deployments/scale` of `stalwart` only, plus `list` on Pods in `apps`
+  to wait until Stalwart has stopped (RBAC can't narrow `list` to a
+  label). RocksDB is only consistent on disk while Stalwart is down, so
+  k3s-apps' nightly backup CronJob scales it to 0 and back.
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
   `--resources` list includes; Secrets excluded.
