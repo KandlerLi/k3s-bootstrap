@@ -5,7 +5,7 @@ runner itself (`modules/github_runner`), the three cluster-scoped
 `kubernetes_persistent_volume_v1` resources a namespace-scoped Role can
 never be granted `create` on by name (Kubernetes RBAC's `resourceNames`
 only constrains `get`/`update`/`delete` on *existing* objects), and the
-Kubernetes Dashboard's own RBAC (`dashboard_rbac.tf`) for the same
+Headlamp's (the cluster UI's) own RBAC (`headlamp_rbac.tf`) for the same
 underlying reason in a different shape: granting RBAC is itself
 privilege-defining, so a CI-applied ServiceAccount can never be trusted
 to create its own ServiceAccounts, Roles, or (Cluster)RoleBindings
@@ -19,7 +19,7 @@ standalone repo (2026-09-03) to actually live alongside its real
 siblings under `bootstrap/`, not inside the repo it grants access to.
 Everything [`k3s-apps`](https://github.com/KandlerLi/k3s-apps) actually runs day to day (Blocky, ingress,
 Grafana, home-agent, deluge, open-webui, landing-page, alertmanager,
-kubernetes-dashboard) lives in that repo's own root instead, applied
+headlamp) lives in that repo's own root instead, applied
 via CI using the `k3s-apps-ci` ServiceAccount this repo creates
 (`main.tf`).
 
@@ -232,8 +232,8 @@ change its targets.
 
 `auth` holds Authelia, `apps` every other k3s-apps workload, Traefik
 included (both `enforce: baseline`, `warn: restricted`). `k3s-apps-ci`
-has a Role in each with only the kinds its modules create, and so does
-the Kubernetes Dashboard's ServiceAccount, which lives in `apps`.
+has a Role in each with only the kinds its modules create. Headlamp's
+ServiceAccount lives in `apps`, with cluster-wide read access only.
 
 `node-exporter` holds only k3s-apps' node-exporter DaemonSet, which needs
 the host's network, PID namespace and root filesystem; it is labelled
@@ -254,14 +254,13 @@ here, while `k3s-apps` only references them by name in Pod specs.
   `node-exporter`), each covering exactly the kinds that namespace's
   modules create; for CronJobs only the CronJob objects, since their
   Jobs and Pods belong to the CronJob controller.
-- **Kubernetes Dashboard** (`dashboard_rbac.tf`): read-only, never the
-  upstream default of cluster-admin. The built-in `view` ClusterRole
-  covers namespaced resources but not cluster-scoped ones or RBAC, so a
-  ClusterRole adds those. Secrets stay unreadable on purpose: RBAC can't
-  grant names without values. A namespaced Role lets the Dashboard manage
-  its own key-holder/CSRF Secrets and settings ConfigMap, with unscoped
-  `create` rules because those objects don't exist before its first run.
-  Node/Pod usage metrics are readable too, inert without metrics-server.
+- **Headlamp** (`headlamp_rbac.tf`): read-only, never cluster-admin.
+  Every visitor past Authelia acts as this ServiceAccount
+  (`-unsafe-use-service-account-token`), so its scope is the UI's scope.
+  The built-in `view` ClusterRole covers namespaced resources but not
+  cluster-scoped ones or RBAC, so a ClusterRole adds those. Secrets stay
+  unreadable on purpose: RBAC can't grant names without values. Node/Pod
+  usage metrics come from k3s' metrics-server.
 - **`stalwart-backup`** (`stalwart_backup_rbac.tf`): `get`/`patch` on
   `deployments/scale` of `stalwart` only, plus `list` on Pods in `apps`
   to wait until Stalwart has stopped (RBAC can't narrow `list` to a
