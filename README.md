@@ -216,7 +216,10 @@ no workloads. `ci` exists for two boundaries:
 - **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
   since `dind` needs `privileged: true`. As the other namespaces get
   `baseline`, `ci` and `node-exporter` stay the only places a privileged
-  Pod can run.
+  Pod can run. `auth` and `monitoring` enforce `restricted` (tracker
+  #45); `apps` stays `baseline` with `warn: restricted` because of its
+  root-running Postgres, Deluge and landing-page containers and
+  sankey-export's `chown` init container.
   `default` enforces `baseline` (`psa.tf`); `kube-system` stays
   unlabelled, k3s' own components need it.
 
@@ -224,8 +227,7 @@ The runners' host-path caches are keyed by slot, not namespace, so they
 survive a namespace move.
 
 `monitoring` holds Grafana, Alertmanager and kube-state-metrics:
-`enforce: baseline`, `warn: restricted` to show what `restricted` would
-still reject. `k3s-apps-ci` gets a Role there for exactly the kinds those
+`enforce: restricted`. `k3s-apps-ci` gets a Role there for exactly the kinds those
 modules create. Prometheus reaches Alertmanager and kube-state-metrics
 through ServiceLB on the node's address, so the namespace doesn't
 change its targets.
