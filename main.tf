@@ -25,8 +25,7 @@ resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
     name = "monitoring"
     labels = {
-      "pod-security.kubernetes.io/enforce" = "baseline"
-      "pod-security.kubernetes.io/warn"    = "restricted"
+      "pod-security.kubernetes.io/enforce" = "restricted"
     }
   }
 }
@@ -36,8 +35,7 @@ resource "kubernetes_namespace_v1" "auth" {
   metadata {
     name = "auth"
     labels = {
-      "pod-security.kubernetes.io/enforce" = "baseline"
-      "pod-security.kubernetes.io/warn"    = "restricted"
+      "pod-security.kubernetes.io/enforce" = "restricted"
     }
   }
 }
