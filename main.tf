@@ -207,9 +207,10 @@ resource "kubernetes_role_v1" "k3s_apps_ci_apps" {
     resources  = ["deployments"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
+  # networkpolicies: qbittorrent's Web UI admits only Traefik (tracker #50).
   rule {
     api_groups = ["networking.k8s.io"]
-    resources  = ["ingresses"]
+    resources  = ["ingresses", "networkpolicies"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
   # Only the CronJob objects; their Jobs and Pods belong to the CronJob controller.
