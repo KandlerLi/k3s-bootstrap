@@ -216,10 +216,8 @@ no workloads. `ci` exists for two boundaries:
 - **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
   since `dind` needs `privileged: true`. As the other namespaces get
   `baseline`, `ci` and `node-exporter` stay the only places a privileged
-  Pod can run. `auth` and `monitoring` enforce `restricted` (tracker
-  #45); `apps` stays `baseline` with `warn: restricted` because of its
-  root-running Postgres, Deluge and landing-page containers and
-  sankey-export's `chown` init container.
+  Pod can run. `auth`, `monitoring` (tracker #45) and `apps` (tracker
+  #50) enforce `restricted`.
   `default` enforces `baseline` (`psa.tf`); `kube-system` stays
   unlabelled, k3s' own components need it.
 
@@ -233,7 +231,7 @@ through ServiceLB on the node's address, so the namespace doesn't
 change its targets.
 
 `auth` holds Authelia, `apps` every other k3s-apps workload, Traefik
-included (both `enforce: baseline`, `warn: restricted`). `k3s-apps-ci`
+included (both `enforce: restricted`). `k3s-apps-ci`
 has a Role in each with only the kinds its modules create. Headlamp's
 ServiceAccount lives in `apps`, with cluster-wide read access only.
 
