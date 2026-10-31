@@ -45,8 +45,7 @@ resource "kubernetes_namespace_v1" "apps" {
   metadata {
     name = "apps"
     labels = {
-      "pod-security.kubernetes.io/enforce" = "baseline"
-      "pod-security.kubernetes.io/warn"    = "restricted"
+      "pod-security.kubernetes.io/enforce" = "restricted"
     }
   }
 }
