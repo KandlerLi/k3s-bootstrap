@@ -1,7 +1,7 @@
 # k3s Bootstrap
 
 The k3s cluster's own bootstrap root: the self-hosted GitHub Actions
-runner itself (`modules/github_runner`), the three cluster-scoped
+runners (`modules/github_runner`, ARC), the three cluster-scoped
 `kubernetes_persistent_volume_v1` resources a namespace-scoped Role can
 never be granted `create` on by name (Kubernetes RBAC's `resourceNames`
 only constrains `get`/`update`/`delete` on *existing* objects), and the
@@ -54,147 +54,86 @@ alone, closing one it started itself.
 
 ## Runner design
 
-`modules/github_runner` runs one Deployment per repository and slot
-(`github_runner_slots_per_repository`), each its own Pod with its own
-`docker:dind` and docker-data cache, so a PR check and a post-merge apply
-for the same repository can run at once. Not `replicas > 1` on one
-Deployment: that would point two dockerd processes at one docker-data
-root. History and every bug found building it: `home-infra-docs`'
-`history.md` ("k3s learning cluster") and `decisions.md`.
+`modules/github_runner` runs GitHub's actions-runner-controller (ARC)
+with one runner scale set per repository in
+`repositories.auto.tfvars.json` (tracker #39). There are no idle runner
+Pods: each scale set has one small listener Pod, and ARC creates a fresh
+runner Pod for each job and deletes it afterwards (`minRunners: 0`).
+Until 2026-11 it ran two permanent Deployments ("slots") per
+repository, 16 Pods that were idle most of the time. That design and
+every bug found building it: `home-infra-docs`' `history.md` ("k3s
+learning cluster") and `decisions.md`.
 
-- **Placement.** Every runner is pinned to `k3s-node-2` and tolerates its
-  `ci=github-runner:NoSchedule` taint, so CI never competes with or
-  endangers anything on `k3s-node-1`.
-- **Docker.** A privileged `docker:dind` sidecar per Pod, not
-  kaniko/rootless, so every repository's `docker build`/`docker run`
-  steps work unmodified. A privileged container can escape to its node;
-  that is accepted because `k3s-node-2` runs nothing else. The runner
-  reaches dockerd over a shared Unix socket volume, and dockerd listens
-  on nothing else: dind is started as `dockerd
-  --host=unix:///var/run/docker.sock`. Started without arguments, as
-  before 2026-10-25, the image's entrypoint adds an unauthenticated
-  `--host=tcp://0.0.0.0:2375` whenever `DOCKER_TLS_CERTDIR=""`, and
-  dockerd then sleeps 15 s on purpose to warn about it; only the
-  NetworkPolicy kept other Pods off that port.
+- **Concurrency.** `maxRunners` (`github_runner_max_runners_per_repository`)
+  is only an upper bound. The real limit is node-2. Every runner Pod
+  requests 500m CPU (runner 400m + dind 100m), so about three jobs fit on
+  its two cores. Further Pods stay `Pending` and their jobs wait in
+  GitHub's queue rather than overloading the VM (tracker #12). Memory
+  requests come from the 7-day peak per Pod: 384Mi + 256Mi by default,
+  1Gi for `k3s-apps`' runner (`github_runner_memory_requests`).
+- **Labels.** Every scale set registers `self-hosted, home, debian`, so
+  `runs-on` in every repository stays unchanged. `self-hosted` is not
+  implicit on scale sets, a probe job without it never started.
+- **Controller.** In `arc-system` (`enforce: restricted`), with its
+  listeners. `watchSingleNamespace: ci` gives it Roles in `ci` only, no
+  ClusterRole. It authenticates as the `kandlerli-home-infra-runner`
+  GitHub App (`arc-github-app`: App ID, installation ID, private key).
+  `roll-out.sh` points `DOCKER_CONFIG` at an empty directory, since Helm
+  would otherwise send a stale `ghcr.io` login and get a 403 on the
+  public charts.
+- **Placement.** Controller, listeners and runners are pinned to
+  `k3s-node-2` and tolerate its `ci=github-runner:NoSchedule` taint, so
+  CI never competes with or endangers anything on `k3s-node-1`.
+- **Docker.** A privileged `docker:dind` per Pod, not kaniko/rootless, so
+  every repository's `docker build`/`docker run` steps work unmodified.
+  A privileged container can escape to its node. That is accepted
+  because `k3s-node-2` runs nothing but CI. dind is a native sidecar
+  (`restartPolicy: Always` init container), and its `startupProbe` on
+  `docker info` keeps the runner from starting until dockerd answers. A
+  runner that came up first failed its first job with `Cannot connect to
+  the Docker daemon` (2026-10-24).
+- **dockerd on the Unix socket only.** dind runs `dockerd
+  --host=unix:///var/run/docker.sock` on a socket volume shared with the
+  runner. Without arguments, as before 2026-10-25, the image's
+  entrypoint adds an unauthenticated `--host=tcp://0.0.0.0:2375` whenever
+  `DOCKER_TLS_CERTDIR=""`.
+- **dind retries in place.** Under heavy IO, dockerd gives up on its
+  managed containerd after 15 s. Left to Kubernetes, every such exit
+  meant growing CrashLoopBackOff delays, so dockerd runs in a shell loop
+  that retries after 5 s and forwards SIGTERM for a clean shutdown.
 - **MTU.** The Pod network's MTU is 1450. dockerd's bridge networks
   default to 1500, which silently black-holed response bodies of
   `container:` job steps. `daemon.json` sets `"mtu": 1450` and, via
   `default-network-opts`, the same for every bridge network dockerd
   creates, including the per-job network GitHub's runner makes.
 - **Shared paths.** A `container:` job's bind-mount sources resolve on
-  dockerd's filesystem, not the runner's. So `actions-runner-install`,
-  `work` and the Terraform plugin cache are mounted at identical absolute
-  paths in both containers, and an init container seeds
-  `actions-runner-install` from the image's own `/actions-runner`
-  (see "Caches" for why only once per image).
-  `umask 000` ahead of the image's entrypoint keeps files written by one
-  container usable by the other (the uid mismatch; it replaced a polling
-  `chmod` fixer).
-- **Waiting for dind.** The runner container runs `docker info` in a loop
-  before the image's entrypoint and only then registers with GitHub, with
-  no time limit. Without it, a runner came `online` while dind was still
-  starting under IO load, and the first job failed with `Cannot connect
-  to the Docker daemon` (2026-10-24). After a finished job the loop
-  passes immediately, since dind keeps running.
-- **dind retries in place.** Under the IO load after a homeserver reboot,
-  dockerd gives up on its managed containerd after 15 s (`timeout
-  waiting for containerd to start`). Left to Kubernetes, every such exit
-  restarted the dind container with growing CrashLoopBackOff delays; on
-  2026-10-25 that, plus an earlier 180 s limit in the runner's wait,
-  kept runners offline for 40 minutes after a reboot. The dind container
-  now runs dockerd in a shell loop that retries after 5 s; the
-  containerd it already started keeps running, so a later attempt finds
-  it ready. The loop forwards SIGTERM to dockerd, so Pod shutdown stays
-  clean.
-- **Image and registration.** The community `myoung34/github-runner`
-  image, whose registration logic replaces what a persistent systemd
-  service needed. GitHub App auth: the entrypoint mints a short-lived
-  installation token from `APP_ID`/`APP_PRIVATE_KEY` at start (see
-  `decisions.md` on why GHCR pulls stay on a classic PAT). Runner names
-  are prefixed `k3s-node-2-`; labels stay `self-hosted, home, debian`, so
-  no workflow needed a change. A checksum annotation of the App's private
-  key rolls every runner Pod on rotation, since env from a Secret is only
-  read at container start.
-- **Ephemeral.** One job per runner process: after the job the listener
-  exits and Kubernetes restarts the `runner` container **in the same
-  Pod**, so Pod-lifetime `emptyDir`s survive from job to job. The
-  container's wrapper therefore empties `/work` before every start, so
-  each job begins with no checkouts, tool caches or downloaded actions
-  (`_actions`) from the previous one: no leftover files breaking the
-  next checkout, and no job tampering with code the next job runs.
-  GitHub's recommended pattern for container runners.
-  `EPHEMERAL` is set to `true` explicitly, since the entrypoint treats any
-  set value, even `false`, as true. The runner never self-updates (bump
-  the image instead), never starts its own dockerd (the sidecar owns
-  that), and runs as uid 0, one less identity mismatch.
-- **Caches.** docker-data and the Terraform plugin cache are `host_path`
-  volumes, not `emptyDir`: with ephemeral Pods, `emptyDir` wiped both on
-  every job, costing 5-8 minutes of `terraform init` per PR check. Both
-  are scoped per repository and slot (two dockerds, or concurrent
-  Terraform writers, must never share one), created with
-  `DirectoryOrCreate`. A `pruner` sidecar regularly prunes unused images
-  and build cache so docker-data stays bounded; it only removes what is
-  unused, never an in-flight job's data.
-- **Runner install.** `actions-runner-install` (678 MB, ~11,400 files) is
-  a per-slot `host_path` too. As an `emptyDir` it was re-seeded by every
-  new Pod, so after a homeserver reboot all 16 Pods copied it at once
-  onto the HDD-backed VM disk: 30+ minutes without CI, and the IO
-  starved `k3s-node-1` too (Traefik and Authelia down for ~15 minutes on
-  2026-10-24). The init container now copies only when
-  `.seeded-image` doesn't match the runner image, writing the marker
-  last so an interrupted copy is redone; an image bump re-seeds each
-  slot once. Reusing the directory is safe: without
-  `CONFIGURED_ACTIONS_RUNNER_FILES_DIR` the entrypoint deletes `.runner`
-  and re-registers with `--replace` on every start. `_diag` logs older
-  than 7 days are deleted at Pod start, since nothing else bounds them
-  now.
-- **Resources.** The runner container has a writable root filesystem on
-  purpose: it is the CI job's working directory. CPU requests stay small
-  (10m) while limits allow bursts; the limits were raised against real
-  OOMKills and throttling as `k3s-apps`' Terraform grew. With several
-  runners busy at once, `k3s-node-2`'s two cores are the real ceiling.
+  dockerd's filesystem, not the runner's. So `/home/runner/_work`, the
+  runner's externals (copied by an init container) and
+  `/terraform-plugin-cache` are mounted at the same paths in both
+  containers. The runner runs as root with `umask 000`, so files it
+  writes stay usable by job containers running under another uid.
+- **Image.** The official `ghcr.io/actions/actions-runner`, registered
+  per job with a JIT config from ARC. The runner never self-updates (bump
+  the image instead). The first Pod after an image bump spends ~2.5 min
+  pulling it.
+- **No caches.** Every Pod starts empty (`emptyDir` only), so no job can
+  leave anything behind for the next one: no checkouts, tool caches,
+  Docker images or Terraform providers. The cost, measured 2026-11-01:
+  ~70 s from queued to started, plus ~76 s of `terraform init` for
+  providers. A provider cache is tracked separately.
 - **Kubernetes API access.** Only `k3s-apps`' runners get a
-  ServiceAccount (`github_runner_service_accounts`), whose token is
-  mounted into every container of the Pod, so its Terraform reaches the
-  cluster like any in-cluster process. Every other runner has no token.
+  ServiceAccount token (`github_runner_service_accounts`), so its
+  Terraform reaches the cluster like any in-cluster process. Every other
+  runner Pod has `automountServiceAccountToken: false`.
 - **Network policy.** Runner Pods execute whatever a workflow says, inside
   a privileged dind, on the same flat Pod network as every app. Their
   policies allow no ingress; egress only to DNS and the public internet
   (private and link-local ranges excluded), plus, for `k3s-apps`' runners
   only, the Kubernetes API (the server node's address after kube-proxy's
-  DNAT, and the ClusterIP) and Stalwart's management API. Enforced by
-  k3s's embedded network-policy controller. They select the labels
-  `github-runner: "true"` and `github-runner-cluster-access: "true"`,
-  which both the slot Deployments and the ARC runner Pods carry.
-
-### Autoscaling with ARC (migration in progress, tracker #39)
-
-The slot Deployments above are being replaced by GitHub's
-actions-runner-controller (ARC) with runner scale sets
-(`modules/github_runner/arc.tf`). Each scale set has a small listener
-Pod. Runner Pods are created per job and deleted afterwards
-(`minRunners: 0`) up to `maxRunners`. When node-2 can't fit another
-Pod's `requests`, that Pod stays `Pending` and the job waits in GitHub's
-queue, so `requests` (sized from the 7-day peak per Pod) decide how many
-jobs run at once.
-
-- **Controller.** In `arc-system` (`enforce: restricted`), with its
-  listeners, all pinned to node-2. `watchSingleNamespace: ci` limits the
-  controller's Roles to `ci`. It authenticates with the same runner App
-  as the slots (`arc-github-app`; ARC needs the installation ID too).
-- **Runner Pod.** The official `actions/actions-runner` image plus dind
-  as a native sidecar (`restartPolicy: Always`). Its `startupProbe` on
-  `docker info` holds the runner back until dockerd answers, replacing
-  the wait loop. Kept from the slots: Unix-socket-only dockerd and its
-  in-place retry loop, the MTU `daemon.json`, identical paths in both
-  containers (`/home/runner/_work`, externals, `/terraform-plugin-cache`),
-  and root with `umask 000` for the runner.
-- **No caches yet.** Every Pod starts empty (`emptyDir` only), so no job
-  can leave anything behind for the next one, including across
-  repositories. That costs image pulls and `terraform init` per job;
-  measure before adding a cache.
-- **Probes.** `dyndns-probe-a`/`-b` only exist to test label routing
-  (whether `self-hosted` is implicit or can be set) next to the slots.
+  DNAT, and the ClusterIP), Stalwart's management API and Blocky's
+  Postgres/API and Grafana for the password rotation. Enforced by k3s's
+  embedded network-policy controller, selected by the Pod labels
+  `github-runner: "true"` and `github-runner-cluster-access: "true"`.
 
 ## Storage
 
@@ -242,8 +181,8 @@ every other k3s-apps workload in `apps` (tracker #32). `default` holds
 no workloads. `ci` exists for two boundaries:
 
 - **RBAC:** `k3s-apps-ci` has Roles only in the app namespaces, so it
-  can't reach the runner Deployments or the GitHub App key in
-  `github-runner-token`, which registers runners for every repository.
+  can't reach the runner scale sets or the GitHub App key in
+  `arc-github-app`, which registers runners for every repository.
 - **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
   since `dind` needs `privileged: true`. As the other namespaces get
   `baseline`, `ci` and `node-exporter` stay the only places a privileged
@@ -251,9 +190,6 @@ no workloads. `ci` exists for two boundaries:
   #50) enforce `restricted`.
   `default` enforces `baseline` (`psa.tf`); `kube-system` stays
   unlabelled, k3s' own components need it.
-
-The runners' host-path caches are keyed by slot, not namespace, so they
-survive a namespace move.
 
 `monitoring` holds Grafana, Alertmanager and kube-state-metrics:
 `enforce: restricted`. `k3s-apps-ci` gets a Role there for exactly the kinds those

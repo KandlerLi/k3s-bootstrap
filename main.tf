@@ -71,10 +71,9 @@ module "github_runner" {
   github_runner_app_installation_id = var.github_runner_app_installation_id
   github_runner_repositories        = var.github_runner_repositories
 
-  # Probes for tracker #39: -a tests whether self-hosted is implicit, -b whether it can be set.
-  github_runner_scale_sets = {
-    dyndns-probe-a = { repository = "dyndns", labels = ["arc-probe-a"], max_runners = 1 }
-    dyndns-probe-b = { repository = "dyndns", labels = ["self-hosted", "arc-probe-b"], max_runners = 1 }
+  # k3s-apps' Terraform peaked at 1.26 GiB per Pod over 7 days; everything else stays under 550 MiB.
+  github_runner_memory_requests = {
+    k3s-apps = "1Gi"
   }
 
   github_runner_service_accounts = {

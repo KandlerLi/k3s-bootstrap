@@ -24,10 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Keep in sync with modules/github_runner/main.tf and arc.tf.
+        # Keep in sync with modules/github_runner/arc.tf.
         include:
-          - name: github-runner
-            ref: myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7
           - name: dind
             ref: docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
           - name: actions-runner
