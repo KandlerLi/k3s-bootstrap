@@ -36,6 +36,10 @@ secret_access_key="$(pass show aws/k3s-bootstrap-local/secret-access-key 2>/dev/
 export AWS_ACCESS_KEY_ID="${access_key_id}"
 export AWS_SECRET_ACCESS_KEY="${secret_access_key}"
 
+# Helm pulls the public ARC charts anonymously; a stale ghcr.io login in ~/.docker/config.json gets a 403 even for those.
+docker_config_dir="$(mktemp -d)"
+export DOCKER_CONFIG="${docker_config_dir}"
+
 tunnel_pattern="ssh.*-L 6443:192.168.101.10:6443"
 tunnel_started_by_this_script=0
 
@@ -48,6 +52,7 @@ else
 fi
 
 cleanup() {
+  rm -rf "${docker_config_dir}"
   if [ "${tunnel_started_by_this_script}" -eq 1 ]; then
     echo "roll-out.sh: closing the SSH tunnel this script started"
     pkill -f "${tunnel_pattern}" || true
