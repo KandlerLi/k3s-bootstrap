@@ -143,3 +143,26 @@ variable "github_runner_api_server_ip" {
   type        = string
   default     = "192.168.101.10"
 }
+
+variable "github_runner_app_installation_id" {
+  description = "The runner App's installation ID on var.github_runner_owner, which ARC's GitHub client needs. Not secret."
+  type        = string
+}
+
+variable "arc_controller_namespace" {
+  description = "Namespace of the ARC controller and its listener Pods."
+  type        = string
+}
+
+variable "github_runner_scale_sets" {
+  description = "ARC runner scale sets by Helm release name: see README, \"Runner design\"."
+  type = map(object({
+    repository           = string
+    labels               = list(string)
+    max_runners          = number
+    cpu_request          = optional(string, "400m")
+    memory_request       = optional(string, "384Mi")
+    service_account_name = optional(string)
+  }))
+  default = {}
+}

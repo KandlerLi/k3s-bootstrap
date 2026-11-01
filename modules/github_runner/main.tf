@@ -51,9 +51,13 @@ resource "kubernetes_deployment_v1" "github_runner" {
 
     template {
       metadata {
-        labels = {
-          app = "github-runner-${each.key}"
-        }
+        labels = merge(
+          {
+            app             = "github-runner-${each.key}"
+            "github-runner" = "true"
+          },
+          each.value.service_account_name != null ? { "github-runner-cluster-access" = "true" } : {},
+        )
 
         # Rolls every runner Pod when the App key rotates; env from a Secret is only read at start.
         annotations = {

@@ -163,8 +163,38 @@ root. History and every bug found building it: `home-infra-docs`'
   (private and link-local ranges excluded), plus, for `k3s-apps`' runners
   only, the Kubernetes API (the server node's address after kube-proxy's
   DNAT, and the ClusterIP) and Stalwart's management API. Enforced by
-  k3s's embedded network-policy controller, matched by the per-slot app
-  label so adding them didn't roll the Pods.
+  k3s's embedded network-policy controller. They select the labels
+  `github-runner: "true"` and `github-runner-cluster-access: "true"`,
+  which both the slot Deployments and the ARC runner Pods carry.
+
+### Autoscaling with ARC (migration in progress, tracker #39)
+
+The slot Deployments above are being replaced by GitHub's
+actions-runner-controller (ARC) with runner scale sets
+(`modules/github_runner/arc.tf`). Each scale set has a small listener
+Pod. Runner Pods are created per job and deleted afterwards
+(`minRunners: 0`) up to `maxRunners`. When node-2 can't fit another
+Pod's `requests`, that Pod stays `Pending` and the job waits in GitHub's
+queue, so `requests` (sized from the 7-day peak per Pod) decide how many
+jobs run at once.
+
+- **Controller.** In `arc-system` (`enforce: restricted`), with its
+  listeners, all pinned to node-2. `watchSingleNamespace: ci` limits the
+  controller's Roles to `ci`. It authenticates with the same runner App
+  as the slots (`arc-github-app`; ARC needs the installation ID too).
+- **Runner Pod.** The official `actions/actions-runner` image plus dind
+  as a native sidecar (`restartPolicy: Always`). Its `startupProbe` on
+  `docker info` holds the runner back until dockerd answers, replacing
+  the wait loop. Kept from the slots: Unix-socket-only dockerd and its
+  in-place retry loop, the MTU `daemon.json`, identical paths in both
+  containers (`/home/runner/_work`, externals, `/terraform-plugin-cache`),
+  and root with `umask 000` for the runner.
+- **No caches yet.** Every Pod starts empty (`emptyDir` only), so no job
+  can leave anything behind for the next one, including across
+  repositories. That costs image pulls and `terraform init` per job;
+  measure before adding a cache.
+- **Probes.** `dyndns-probe-a`/`-b` only exist to test label routing
+  (whether `self-hosted` is implicit or can be set) next to the slots.
 
 ## Storage
 
@@ -205,7 +235,8 @@ separate state.
 
 ## Namespaces
 
-The runners live in `ci`; Grafana, Alertmanager and kube-state-metrics
+The runners live in `ci`, the ARC controller and its listeners in
+`arc-system` (`enforce: restricted`); Grafana, Alertmanager and kube-state-metrics
 in `monitoring`; Authelia in `auth`; node-exporter in `node-exporter`;
 every other k3s-apps workload in `apps` (tracker #32). `default` holds
 no workloads. `ci` exists for two boundaries:
