@@ -24,12 +24,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Keep in sync with modules/github_runner/main.tf.
+        # Keep in sync with modules/github_runner/main.tf and arc.tf.
         include:
           - name: github-runner
             ref: myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7
           - name: dind
             ref: docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+          - name: actions-runner
+            ref: ghcr.io/actions/actions-runner:2.338.1@sha256:e275409999c37162649aa050ca573f03eab2eabcb3a1e7fcc47548de6b4f9690
+          - name: arc-controller
+            ref: ghcr.io/actions/gha-runner-scale-set-controller:0.15.1@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90
     uses: KandlerLi/gha-common/.github/workflows/trivy-image.yml@v0.0.15
     with:
       image_name: ${{ matrix.name }}
