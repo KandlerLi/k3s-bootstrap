@@ -54,7 +54,7 @@ variable "github_runner_owner" {
 
 variable "github_runner_repositories" {
   description = <<-EOT
-    One Deployment per entry. Generated from KandlerLi/repo-infra's own
+    One runner scale set per entry. Generated from KandlerLi/repo-infra's own
     config.yml (every repository with `runner: true`) by home-infra's
     scripts/sync_github_runner_repositories.py, into this repo's own
     repositories.auto.tfvars.json -- Terraform auto-loads that file, so
@@ -72,7 +72,7 @@ variable "github_runner_repositories" {
 variable "github_runner_service_accounts" {
   description = <<-EOT
     Map of repository id -> ServiceAccount name, for the (today: one)
-    repository whose runner Deployment should mount a real, narrowly-
+    repository whose runner Pods should mount a real, narrowly-
     scoped in-cluster ServiceAccount token instead of the automount-
     disabled default every other repo's runner Pod gets. Deliberately
     separate from github_runner_repositories/repositories.auto.tfvars.json
@@ -86,57 +86,9 @@ variable "github_runner_service_accounts" {
   default     = {}
 }
 
-variable "github_runner_slots_per_repository" {
-  description = <<-EOT
-    How many runner Deployments (slots) each repository gets. Every
-    slot is an independent ephemeral runner that registers under the
-    same labels, so GitHub hands concurrent jobs (e.g. a PR check and
-    a post-merge apply) to different slots instead of queueing them.
-    Each slot has its own docker-data cache on k3s-node-2's disk and
-    its own idle requests (~60m CPU/256Mi), so size k3s-node-2 for
-    repositories x slots.
-  EOT
-  type        = number
-  default     = 2
 
-  validation {
-    condition     = var.github_runner_slots_per_repository >= 1
-    error_message = "At least one runner slot per repository is required."
-  }
-}
 
-variable "github_runner_prune_interval_seconds" {
-  description = <<-EOT
-    How often each runner Pod's "pruner" sidecar prunes its own dind
-    daemon's unused images and build cache. Every slot has its own
-    persistent docker-data hostPath on k3s-node-2's disk, which nothing
-    else ever cleans.
-  EOT
-  type        = number
-  default     = 3600
-}
 
-variable "github_runner_prune_unused_image_age" {
-  description = <<-EOT
-    Passed to `docker image prune --all --filter until=`: unused images
-    older than this are removed. Images used by a running container are
-    never removed regardless.
-  EOT
-  type        = string
-  default     = "24h"
-}
-
-variable "github_runner_prune_build_cache_keep_storage" {
-  description = <<-EOT
-    Passed to `docker builder prune --keep-storage`: the most build
-    cache each slot's daemon keeps. This is per slot, so total worst
-    case is roughly repositories x slots x this value, plus the
-    images kept by github_runner_prune_unused_image_age -- size it
-    against k3s-node-2's disk (42GB at time of writing).
-  EOT
-  type        = string
-  default     = "2GB"
-}
 
 variable "github_runner_api_server_ip" {
   description = "k3s server node address runners with a ServiceAccount reach the Kubernetes API on (port 6443) -- KandlerLi/home-infra's k3s_node_vm_ip."
@@ -154,15 +106,14 @@ variable "arc_controller_namespace" {
   type        = string
 }
 
-variable "github_runner_scale_sets" {
-  description = "ARC runner scale sets by Helm release name: see README, \"Runner design\"."
-  type = map(object({
-    repository           = string
-    labels               = list(string)
-    max_runners          = number
-    cpu_request          = optional(string, "400m")
-    memory_request       = optional(string, "384Mi")
-    service_account_name = optional(string)
-  }))
-  default = {}
+variable "github_runner_max_runners_per_repository" {
+  description = "Upper bound per scale set; the real limit is what fits on k3s-node-2: see README, \"Runner design\"."
+  type        = number
+  default     = 3
+}
+
+variable "github_runner_memory_requests" {
+  description = "Runner container memory request by repository id, for repos above the default's 7-day peak."
+  type        = map(string)
+  default     = {}
 }

@@ -1,4 +1,4 @@
-# ARC: a controller plus one autoscaling runner scale set per entry. See README, "Runner design".
+# ARC: a controller plus one autoscaling runner scale set per repository. See README, "Runner design".
 
 locals {
   arc_chart_repository = "oci://ghcr.io/actions/actions-runner-controller-charts"
@@ -8,6 +8,15 @@ locals {
   dind_image           = "docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07"
 
   arc_controller_service_account = "arc-controller"
+
+  # self-hosted is not implicit on scale sets (tracker #39 probe), so it is listed like the others.
+  github_runner_scale_sets = {
+    for repo in var.github_runner_repositories : repo.id => {
+      repository           = repo.repository
+      service_account_name = try(var.github_runner_service_accounts[repo.id], null)
+      memory_request       = try(var.github_runner_memory_requests[repo.id], "384Mi")
+    }
+  }
 
   node_2_placement = {
     nodeSelector = { "kubernetes.io/hostname" = "k3s-node-2" }
@@ -27,6 +36,25 @@ locals {
     allowPrivilegeEscalation = false
     readOnlyRootFilesystem   = true
     capabilities             = { drop = ["ALL"] }
+  }
+}
+
+# default-network-opts sets the MTU for every bridge network, custom ones included: see README, "Runner design".
+resource "kubernetes_config_map_v1" "github_runner_dind_daemon_config" {
+  metadata {
+    name      = "github-runner-dind-daemon-config"
+    namespace = var.namespace
+  }
+
+  data = {
+    "daemon.json" = jsonencode({
+      mtu = 1450
+      default-network-opts = {
+        bridge = {
+          "com.docker.network.driver.mtu" = "1450"
+        }
+      }
+    })
   }
 }
 
@@ -73,7 +101,7 @@ resource "kubernetes_secret_v1" "arc_github_app" {
 }
 
 resource "helm_release" "arc_scale_set" {
-  for_each = var.github_runner_scale_sets
+  for_each = local.github_runner_scale_sets
 
   name       = each.key
   namespace  = var.namespace
@@ -84,9 +112,9 @@ resource "helm_release" "arc_scale_set" {
   values = [yamlencode({
     githubConfigUrl    = "https://github.com/${var.github_runner_owner}/${each.value.repository}"
     githubConfigSecret = kubernetes_secret_v1.arc_github_app.metadata[0].name
-    scaleSetLabels     = each.value.labels
+    scaleSetLabels     = ["self-hosted", "home", "debian"]
     minRunners         = 0
-    maxRunners         = each.value.max_runners
+    maxRunners         = var.github_runner_max_runners_per_repository
 
     # Required with watchSingleNamespace: the chart can't find the controller itself.
     controllerServiceAccount = {
@@ -177,7 +205,7 @@ resource "helm_release" "arc_scale_set" {
             { name = "DOCKER_HOST", value = "unix:///var/run/docker.sock" },
           ]
           resources = {
-            requests = { cpu = each.value.cpu_request, memory = each.value.memory_request }
+            requests = { cpu = "400m", memory = each.value.memory_request }
             limits   = { cpu = "2000m", memory = "1Gi" }
           }
           volumeMounts = [

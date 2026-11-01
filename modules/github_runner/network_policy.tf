@@ -1,9 +1,6 @@
 # Keeps CI code away from the rest of the cluster and private networks: see README, "Runner design".
 
 resource "kubernetes_network_policy_v1" "github_runner_isolation" {
-  # The legacy Pods roll onto the new labels first, so no runner is ever unselected.
-  depends_on = [kubernetes_deployment_v1.github_runner]
-
   metadata {
     name      = "github-runner-isolation"
     namespace = var.namespace
@@ -47,9 +44,6 @@ resource "kubernetes_network_policy_v1" "github_runner_isolation" {
 }
 
 resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
-  # The legacy Pods roll onto the new labels first, so no runner is ever unselected.
-  depends_on = [kubernetes_deployment_v1.github_runner]
-
   metadata {
     name      = "github-runner-cluster-access"
     namespace = var.namespace
