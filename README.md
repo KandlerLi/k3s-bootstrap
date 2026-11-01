@@ -107,15 +107,19 @@ learning cluster") and `decisions.md`.
   `default-network-opts`, the same for every bridge network dockerd
   creates, including the per-job network GitHub's runner makes.
 - **Shared paths.** A `container:` job's bind-mount sources resolve on
-  dockerd's filesystem, not the runner's. So `/home/runner/_work`, the
+  dockerd's filesystem, not the runner's. So `/actions-runner/_work`, the
   runner's externals (copied by an init container) and
   `/terraform-plugin-cache` are mounted at the same paths in both
   containers. The runner runs as root with `umask 000`, so files it
   writes stay usable by job containers running under another uid.
-- **Image.** The official `ghcr.io/actions/actions-runner`, registered
-  per job with a JIT config from ARC. The runner never self-updates (bump
-  the image instead). The first Pod after an image bump spends ~2.5 min
-  pulling it.
+- **Image.** The community `myoung34/github-runner`, as for the slots,
+  started with `run.sh` instead of its entrypoint, so ARC's JIT config
+  registers it per job. Not the official `actions/actions-runner`: Jobs
+  that run directly on the runner, without `container:` (`k3s-apps`,
+  `secrets-manager`), need its `node` (`setup-terraform`'s wrapper), AWS
+  CLI and Debian `apt`. The official image's Ubuntu 24.04 has neither
+  `node` on `PATH` nor an `awscli` package (2026-11-01). The runner never
+  self-updates (bump the image instead).
 - **No caches.** Every Pod starts empty (`emptyDir` only), so no job can
   leave anything behind for the next one: no checkouts, tool caches,
   Docker images or Terraform providers. The cost, measured 2026-11-01:
