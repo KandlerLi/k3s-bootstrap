@@ -4,8 +4,9 @@ locals {
   arc_chart_repository = "oci://ghcr.io/actions/actions-runner-controller-charts"
   arc_chart_version    = "0.15.1"
   arc_controller_image = "0.15.1@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90"
-  arc_runner_image     = "ghcr.io/actions/actions-runner:2.338.1@sha256:e275409999c37162649aa050ca573f03eab2eabcb3a1e7fcc47548de6b4f9690"
-  dind_image           = "docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07"
+  # The slots' image, not actions/actions-runner: host-run jobs need its node and AWS CLI. See README, "Runner design".
+  arc_runner_image = "myoung34/github-runner:2.337.0-debian-trixie@sha256:ab5c1f5abd6e96fa357c5003575a6b431265d5e7a41d81b5ec690abf3163dad7"
+  dind_image       = "docker:29.7.2-dind@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07"
 
   arc_controller_service_account = "arc-controller"
 
@@ -153,8 +154,8 @@ resource "helm_release" "arc_scale_set" {
           {
             name         = "init-dind-externals"
             image        = local.arc_runner_image
-            command      = ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
-            volumeMounts = [{ name = "dind-externals", mountPath = "/home/runner/tmpDir" }]
+            command      = ["cp", "-r", "/actions-runner/externals/.", "/actions-runner/tmpDir/"]
+            volumeMounts = [{ name = "dind-externals", mountPath = "/actions-runner/tmpDir" }]
           },
           # A native sidecar: the runner starts only once the startupProbe sees dockerd.
           {
@@ -185,9 +186,9 @@ resource "helm_release" "arc_scale_set" {
               limits   = { cpu = "1000m", memory = "768Mi" }
             }
             volumeMounts = [
-              { name = "work", mountPath = "/home/runner/_work" },
+              { name = "work", mountPath = "/actions-runner/_work" },
               { name = "dind-sock", mountPath = "/var/run" },
-              { name = "dind-externals", mountPath = "/home/runner/externals" },
+              { name = "dind-externals", mountPath = "/actions-runner/externals" },
               { name = "terraform-plugin-cache", mountPath = "/terraform-plugin-cache" },
               { name = "dind-daemon-config", mountPath = "/etc/docker/daemon.json", subPath = "daemon.json", readOnly = true },
             ]
@@ -198,7 +199,7 @@ resource "helm_release" "arc_scale_set" {
           name  = "runner"
           image = local.arc_runner_image
           # Root and umask 000 as before, against the uid mismatch with container: jobs: see README, "Runner design".
-          command         = ["sh", "-c", "umask 000; exec /home/runner/run.sh"]
+          command         = ["sh", "-c", "umask 000; exec /actions-runner/run.sh"]
           securityContext = { runAsUser = 0 }
           env = [
             { name = "RUNNER_ALLOW_RUNASROOT", value = "1" },
@@ -209,7 +210,7 @@ resource "helm_release" "arc_scale_set" {
             limits   = { cpu = "2000m", memory = "1Gi" }
           }
           volumeMounts = [
-            { name = "work", mountPath = "/home/runner/_work" },
+            { name = "work", mountPath = "/actions-runner/_work" },
             { name = "dind-sock", mountPath = "/var/run" },
             { name = "terraform-plugin-cache", mountPath = "/terraform-plugin-cache" },
           ]
