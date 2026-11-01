@@ -1,14 +1,9 @@
 # Keeps CI code away from the rest of the cluster and private networks: see README, "Runner design".
 
-locals {
-  runner_app_labels = [for key in keys(local.github_runner_slots_by_key) : "github-runner-${key}"]
-  cluster_access_runner_app_labels = [
-    for key, slot in local.github_runner_slots_by_key : "github-runner-${key}"
-    if slot.service_account_name != null
-  ]
-}
-
 resource "kubernetes_network_policy_v1" "github_runner_isolation" {
+  # The legacy Pods roll onto the new labels first, so no runner is ever unselected.
+  depends_on = [kubernetes_deployment_v1.github_runner]
+
   metadata {
     name      = "github-runner-isolation"
     namespace = var.namespace
@@ -16,11 +11,7 @@ resource "kubernetes_network_policy_v1" "github_runner_isolation" {
 
   spec {
     pod_selector {
-      match_expressions {
-        key      = "app"
-        operator = "In"
-        values   = local.runner_app_labels
-      }
+      match_labels = { "github-runner" = "true" }
     }
 
     policy_types = ["Ingress", "Egress"]
@@ -56,7 +47,8 @@ resource "kubernetes_network_policy_v1" "github_runner_isolation" {
 }
 
 resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
-  count = length(local.cluster_access_runner_app_labels) > 0 ? 1 : 0
+  # The legacy Pods roll onto the new labels first, so no runner is ever unselected.
+  depends_on = [kubernetes_deployment_v1.github_runner]
 
   metadata {
     name      = "github-runner-cluster-access"
@@ -65,11 +57,7 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
 
   spec {
     pod_selector {
-      match_expressions {
-        key      = "app"
-        operator = "In"
-        values   = local.cluster_access_runner_app_labels
-      }
+      match_labels = { "github-runner-cluster-access" = "true" }
     }
 
     policy_types = ["Egress"]
@@ -147,4 +135,9 @@ resource "kubernetes_network_policy_v1" "github_runner_cluster_access" {
       }
     }
   }
+}
+
+moved {
+  from = kubernetes_network_policy_v1.github_runner_cluster_access[0]
+  to   = kubernetes_network_policy_v1.github_runner_cluster_access
 }

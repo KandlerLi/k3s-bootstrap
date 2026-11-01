@@ -40,6 +40,16 @@ resource "kubernetes_namespace_v1" "auth" {
   }
 }
 
+# The ARC controller and its listeners: see README, "Namespaces".
+resource "kubernetes_namespace_v1" "arc_system" {
+  metadata {
+    name = "arc-system"
+    labels = {
+      "pod-security.kubernetes.io/enforce" = "restricted"
+    }
+  }
+}
+
 # Every remaining k3s-apps workload, Traefik included: see README, "Namespaces".
 resource "kubernetes_namespace_v1" "apps" {
   metadata {
@@ -53,11 +63,19 @@ resource "kubernetes_namespace_v1" "apps" {
 module "github_runner" {
   source = "./modules/github_runner"
 
-  namespace = kubernetes_namespace_v1.ci.metadata[0].name
+  namespace                = kubernetes_namespace_v1.ci.metadata[0].name
+  arc_controller_namespace = kubernetes_namespace_v1.arc_system.metadata[0].name
 
-  github_runner_app_id          = local.home_infra_github_runner["app_id"]
-  github_runner_app_private_key = local.home_infra_github_runner["app_private_key"]
-  github_runner_repositories    = var.github_runner_repositories
+  github_runner_app_id              = local.home_infra_github_runner["app_id"]
+  github_runner_app_private_key     = local.home_infra_github_runner["app_private_key"]
+  github_runner_app_installation_id = var.github_runner_app_installation_id
+  github_runner_repositories        = var.github_runner_repositories
+
+  # Probes for tracker #39: -a tests whether self-hosted is implicit, -b whether it can be set.
+  github_runner_scale_sets = {
+    dyndns-probe-a = { repository = "dyndns", labels = ["arc-probe-a"], max_runners = 1 }
+    dyndns-probe-b = { repository = "dyndns", labels = ["self-hosted", "arc-probe-b"], max_runners = 1 }
+  }
 
   github_runner_service_accounts = {
     k3s-apps = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
