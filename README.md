@@ -52,6 +52,10 @@ for the `k3s-bootstrap-local` IAM identity from `pass` (see
 section for how those get created) -- leaving an already-open tunnel
 alone, closing one it started itself.
 
+After merging a PR, `scripts/update.sh plan`/`apply` switches to a fresh
+`main`, refusing a dirty tree, and runs `roll-out.sh` with the same arguments.
+`terraform init` there picks up changed provider and module versions.
+
 ## Runner design
 
 `modules/github_runner` runs GitHub's actions-runner-controller (ARC)
