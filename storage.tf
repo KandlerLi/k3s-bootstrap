@@ -111,6 +111,34 @@ resource "kubernetes_persistent_volume_v1" "stalwart_backup" {
   }
 }
 
+# Target of k3s-apps' Vaultwarden backup CronJob, on the homeserver's red HDD.
+resource "kubernetes_persistent_volume_v1" "vaultwarden_backup" {
+  metadata {
+    name = "vaultwarden-backup-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "1Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/vaultwarden-backup"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "vaultwarden-backup"
+    }
+  }
+}
+
 resource "kubernetes_persistent_volume_v1" "open_webui_data" {
   metadata {
     name = "open-webui-data-pv"
