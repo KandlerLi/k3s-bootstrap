@@ -1,4 +1,4 @@
-# Argo CD trial: core mode, syncs only k3s-apps' argocd/ into apps. See README, "Argo CD".
+# Argo CD: syncs only k3s-apps' argocd/ into apps; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
 
 locals {
   argocd_image       = "quay.io/argoproj/argocd:v3.5.6@sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335"
@@ -8,6 +8,7 @@ locals {
   image_parts = "^(?P<repository>[^:]+):(?P<tag>.+)$"
 
   argocd_server = "https://kubernetes.default.svc"
+  argocd_url    = "https://argo.jkandler.de"
 
   # Everything Argo CD may write in apps, by name.
   argocd_apps_objects = {
@@ -23,6 +24,14 @@ resource "kubernetes_namespace_v1" "argocd" {
     labels = {
       "pod-security.kubernetes.io/enforce" = "restricted"
     }
+  }
+}
+
+# Traefik's ClusterIP: Argo CD reaches Authelia in-cluster instead of hairpinning through the router.
+data "kubernetes_service_v1" "ingress" {
+  metadata {
+    name      = "ingress-svc"
+    namespace = kubernetes_namespace_v1.apps.metadata[0].name
   }
 }
 
@@ -42,10 +51,13 @@ resource "helm_release" "argocd" {
     global = {
       image         = regex(local.image_parts, local.argocd_image)
       networkPolicy = { create = true }
+      hostAliases = [{
+        ip        = data.kubernetes_service_v1.ingress.spec[0].cluster_ip
+        hostnames = ["auth.jkandler.de"]
+      }]
     }
 
-    # Core mode: no API server, login or Dex; the UI runs locally, see README, "Argo CD".
-    server        = { enabled = false }
+    # Login only through Authelia's OIDC, so no Dex and no local admin.
     dex           = { enabled = false }
     notifications = { enabled = false }
     # The chart has no switch for it.
@@ -53,10 +65,28 @@ resource "helm_release" "argocd" {
 
     configs = {
       cm = {
+        url             = local.argocd_url
         "admin.enabled" = false
+        "oidc.config" = yamlencode({
+          name         = "Authelia"
+          issuer       = "https://auth.jkandler.de"
+          clientID     = "argocd"
+          clientSecret = "$oidc.authelia.clientSecret"
+          # Server-side PKCE (S256), which Authelia requires of every client here.
+          enablePKCEAuthentication = true
+          requestedScopes          = ["openid", "profile", "email", "groups"]
+        })
         "resource.inclusions" = yamlencode([
           for o in local.argocd_apps_objects : { apiGroups = [o.api_group], kinds = [o.kind], clusters = ["*"] }
         ])
+      }
+      # Traefik terminates TLS.
+      params = { "server.insecure" = true }
+      # Authelia already admits only julian; admins is a second gate.
+      rbac = {
+        "policy.default" = ""
+        "policy.csv"     = "g, admins, role:admin"
+        scopes           = "[groups]"
       }
       clusterCredentials = {
         in-cluster = {
@@ -71,6 +101,12 @@ resource "helm_release" "argocd" {
       resources = {
         requests = { cpu = "50m", memory = "256Mi" }
         limits   = { memory = "512Mi" }
+      }
+    }
+    server = {
+      resources = {
+        requests = { cpu = "10m", memory = "64Mi" }
+        limits   = { memory = "256Mi" }
       }
     }
     repoServer = {
@@ -93,6 +129,11 @@ resource "helm_release" "argocd" {
       }
     }
   })]
+
+  set_sensitive = [{
+    name  = "configs.secret.extra.oidc\\.authelia\\.clientSecret"
+    value = local.home_infra_argocd["authelia_oidc_argocd_client_secret"]
+  }]
 }
 
 # Separate release: the Application CRDs must exist before Helm can map these objects.
@@ -174,6 +215,39 @@ resource "kubernetes_role_binding_v1" "argocd_apps" {
   subject {
     kind      = "ServiceAccount"
     name      = "argocd-application-controller"
+    namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+  }
+}
+
+# The UI shows live objects through the server's own ServiceAccount; read-only, syncs run in the controller.
+resource "kubernetes_role_v1" "argocd_server_apps" {
+  metadata {
+    name      = "argocd-server"
+    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+  }
+
+  rule {
+    api_groups = distinct([for o in local.argocd_apps_objects : o.api_group])
+    resources  = keys(local.argocd_apps_objects)
+    verbs      = ["get", "list", "watch"]
+  }
+}
+
+resource "kubernetes_role_binding_v1" "argocd_server_apps" {
+  metadata {
+    name      = "argocd-server"
+    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.argocd_server_apps.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = "argocd-server"
     namespace = kubernetes_namespace_v1.argocd.metadata[0].name
   }
 }

@@ -244,7 +244,8 @@ here, while `k3s-apps` only references them by name in Pod specs.
 - **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` its
   application controller may list the three kinds it deploys and create
   them, but update, patch or delete only the objects named in
-  `local.argocd_apps_objects`. See "Argo CD".
+  `local.argocd_apps_objects`; its server may only read them. See
+  "Argo CD".
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
   `--resources` list includes; Secrets excluded.
@@ -259,30 +260,35 @@ here, while `k3s-apps` only references them by name in Pod specs.
 
 ## Argo CD
 
-A trial (`argocd.tf`): Argo CD deploys k3s-apps' `argocd/landing-page`
-instead of Terraform. Chart `argo-cd`, plus `argocd-apps` for the
+`argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/landing-page`
+instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
+home-infra-docs). Chart `argo-cd`, plus `argocd-apps` for the
 `k3s-apps` AppProject and the `landing-page` Application; it is a second
 release because Helm can't map an Application before its CRD exists.
 
-- **Core mode:** no API server, Dex, notifications or ApplicationSet
-  Pods, and the local admin is disabled, so there is no login, password
-  or route to protect. The UI runs on the laptop with your kubeconfig,
-  after `k3s-tunnel`, with the `argocd` CLI installed:
-  `argocd admin dashboard -n argocd`.
-- **Scope:** the in-cluster cluster Secret restricts the controller to
-  the `apps` namespace and no cluster-scoped resources;
-  `resource.inclusions` and the AppProject both allow only ConfigMap,
-  Service and Deployment; the Role allows changing only the named
-  objects (see "RBAC"). The source is the public k3s-apps repository,
-  so no repository credential exists.
+- **UI and login:** the route lives in k3s-apps and keeps Authelia
+  forward-auth, limited to `user:julian`. Argo CD itself logs in only
+  through Authelia's OIDC (client `argocd`, PKCE S256, `julian_only`);
+  the local admin, Dex, anonymous access and exec are off. Argo CD's RBAC
+  gives `role:admin` to the `admins` group and nothing to anyone else.
+  The client secret's plaintext half comes from `home-infra/argocd`
+  (`secrets.tf`, runbook in secrets-manager). `auth.jkandler.de` is
+  pinned to Traefik's ClusterIP (`hostAliases`), like Vaultwarden.
+- **Without the UI:** `k3s-tunnel`, then, with the `argocd` CLI,
+  `KUBECONFIG=~/.kube/k3s-node-1.yaml argocd admin dashboard -n argocd`
+  runs one locally with your kubeconfig.
+- **Scope:** the in-cluster cluster Secret restricts Argo CD to the `apps`
+  namespace and no cluster-scoped resources; `resource.inclusions` and
+  the AppProject both allow only ConfigMap, Service and Deployment. The
+  controller's Role allows changing only the named objects, the
+  server's is read-only (see "RBAC"), so even an admin session in the UI
+  reaches no further. The source is the public k3s-apps repository, so
+  no repository credential exists.
 - **Sync:** automated with prune and self-heal on `main`, so the k3s-apps
   merge remains the only gate.
-- **Rollout order:** merge and let CI apply the k3s-apps PR first, so
-  Terraform drops the objects from state; then `scripts/update.sh apply`
-  here. Argo CD adopts the running objects on its first sync.
 - **Removing it:** see k3s-apps' docs, "Argo CD", to hand the landing
-  page back to Terraform first, then delete `argocd.tf`; the uninstall
-  removes the CRDs too (`crds.keep = false`).
+  page back to Terraform first, then delete `argocd.tf` and the route;
+  the uninstall removes the CRDs too (`crds.keep = false`).
 
 ## State
 
