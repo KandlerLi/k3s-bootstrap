@@ -1,4 +1,4 @@
-# Argo CD: syncs only k3s-apps' argocd/ into apps; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
+# Argo CD: syncs k3s-apps' argocd/<app> into apps; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
 
 locals {
   argocd_image       = "quay.io/argoproj/argocd:v3.5.6@sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335"
@@ -10,11 +10,16 @@ locals {
   argocd_server = "https://kubernetes.default.svc"
   argocd_url    = "https://argo.jkandler.de"
 
-  # Everything Argo CD may write in apps, by name.
+  # One Application per directory under k3s-apps' argocd/.
+  argocd_applications = ["landing-page", "headlamp", "qbittorrent"]
+
+  # Everything Argo CD may write in apps, by name; PVCs hold data, so Argo CD never creates or deletes one.
   argocd_apps_objects = {
-    configmaps  = { api_group = "", kind = "ConfigMap", names = ["landing-page-html"] }
-    services    = { api_group = "", kind = "Service", names = ["landing-page-svc"] }
-    deployments = { api_group = "apps", kind = "Deployment", names = ["landing-page"] }
+    configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config"] }
+    services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc"] }
+    deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent"] }
+    networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create_delete = true, names = ["qbittorrent"] }
+    persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create_delete = false, names = ["deluge-downloads", "deluge-config"] }
   }
 }
 
@@ -160,13 +165,13 @@ resource "helm_release" "argocd_apps" {
     }
     # No finalizer: deleting the Application leaves its objects running.
     applications = {
-      landing-page = {
+      for app in local.argocd_applications : app => {
         namespace = kubernetes_namespace_v1.argocd.metadata[0].name
         project   = "k3s-apps"
         source = {
           repoURL        = "https://github.com/KandlerLi/k3s-apps.git"
           targetRevision = "main"
-          path           = "argocd/landing-page"
+          path           = "argocd/${app}"
         }
         destination = { server = local.argocd_server, namespace = kubernetes_namespace_v1.apps.metadata[0].name }
         syncPolicy = {
@@ -186,16 +191,24 @@ resource "kubernetes_role_v1" "argocd_apps" {
   rule {
     api_groups = distinct([for o in local.argocd_apps_objects : o.api_group])
     resources  = keys(local.argocd_apps_objects)
-    verbs      = ["get", "list", "watch", "create"]
+    verbs      = ["get", "list", "watch"]
   }
   # create can't be limited by name; changing or deleting anything else in apps stays forbidden.
+  dynamic "rule" {
+    for_each = { for k, o in local.argocd_apps_objects : k => o if o.create_delete }
+    content {
+      api_groups = [rule.value.api_group]
+      resources  = [rule.key]
+      verbs      = ["create"]
+    }
+  }
   dynamic "rule" {
     for_each = local.argocd_apps_objects
     content {
       api_groups     = [rule.value.api_group]
       resources      = [rule.key]
       resource_names = rule.value.names
-      verbs          = ["update", "patch", "delete"]
+      verbs          = rule.value.create_delete ? ["update", "patch", "delete"] : ["update", "patch"]
     }
   }
 }

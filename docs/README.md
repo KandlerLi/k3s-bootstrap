@@ -242,9 +242,10 @@ here, while `k3s-apps` only references them by name in Pod specs.
   label). RocksDB is only consistent on disk while Stalwart is down, so
   k3s-apps' nightly backup CronJob scales it to 0 and back.
 - **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` its
-  application controller may list the three kinds it deploys and create
-  them, but update, patch or delete only the objects named in
-  `local.argocd_apps_objects`; its server may only read them. See
+  application controller may list the kinds it deploys and create them
+  (PVCs excepted), but update, patch or delete only the objects named in
+  `local.argocd_apps_objects` (PVCs: never delete); its server may only
+  read them. See
   "Argo CD".
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
@@ -260,10 +261,11 @@ here, while `k3s-apps` only references them by name in Pod specs.
 
 ## Argo CD
 
-`argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/landing-page`
-instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
+`argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/<app>`
+(landing page, Headlamp, qBittorrent; one Application each,
+`local.argocd_applications`) instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
 home-infra-docs). Chart `argo-cd`, plus `argocd-apps` for the
-`k3s-apps` AppProject and the `landing-page` Application; it is a second
+`k3s-apps` AppProject and the Applications; it is a second
 release because Helm can't map an Application before its CRD exists.
 
 - **UI and login:** the route lives in k3s-apps and keeps Authelia
@@ -279,10 +281,15 @@ release because Helm can't map an Application before its CRD exists.
   runs one locally with your kubeconfig.
 - **Scope:** the in-cluster cluster Secret restricts Argo CD to the `apps`
   namespace and no cluster-scoped resources; `resource.inclusions` and
-  the AppProject both allow only ConfigMap, Service and Deployment. The
-  controller's Role allows changing only the named objects, the
+  the AppProject both allow only the kinds in `local.argocd_apps_objects`
+  (ConfigMap, Service, Deployment, NetworkPolicy, PersistentVolumeClaim).
+  The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
-  reaches no further. The source is the public k3s-apps repository, so
+  reaches no further. A new app adds its directory to
+  `local.argocd_applications` and its object names here.
+- **Data:** PVCs hold qBittorrent's downloads and config. The Role grants
+  no `create` or `delete` on PVCs, only `update`/`patch` by name, and the
+  manifests carry `Prune=false,Delete=false`. The source is the public k3s-apps repository, so
   no repository credential exists.
 - **Sync:** automated with prune and self-heal on `main`, so the k3s-apps
   merge remains the only gate.
