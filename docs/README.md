@@ -241,6 +241,10 @@ here, while `k3s-apps` only references them by name in Pod specs.
   to wait until Stalwart has stopped (RBAC can't narrow `list` to a
   label). RocksDB is only consistent on disk while Stalwart is down, so
   k3s-apps' nightly backup CronJob scales it to 0 and back.
+- **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` its
+  application controller may list the three kinds it deploys and create
+  them, but update, patch or delete only the objects named in
+  `local.argocd_apps_objects`. See "Argo CD".
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
   `--resources` list includes; Secrets excluded.
@@ -252,6 +256,33 @@ here, while `k3s-apps` only references them by name in Pod specs.
   Manager (`home-infra/prometheus`, see its runbook). To rotate it,
   `scripts/roll-out.sh apply -replace=kubernetes_secret_v1.prometheus_kubelet_token`
   and copy the new token.
+
+## Argo CD
+
+A trial (`argocd.tf`): Argo CD deploys k3s-apps' `argocd/landing-page`
+instead of Terraform. Chart `argo-cd`, plus `argocd-apps` for the
+`k3s-apps` AppProject and the `landing-page` Application; it is a second
+release because Helm can't map an Application before its CRD exists.
+
+- **Core mode:** no API server, Dex, notifications or ApplicationSet
+  Pods, and the local admin is disabled, so there is no login, password
+  or route to protect. The UI runs on the laptop with your kubeconfig,
+  after `k3s-tunnel`, with the `argocd` CLI installed:
+  `argocd admin dashboard -n argocd`.
+- **Scope:** the in-cluster cluster Secret restricts the controller to
+  the `apps` namespace and no cluster-scoped resources;
+  `resource.inclusions` and the AppProject both allow only ConfigMap,
+  Service and Deployment; the Role allows changing only the named
+  objects (see "RBAC"). The source is the public k3s-apps repository,
+  so no repository credential exists.
+- **Sync:** automated with prune and self-heal on `main`, so the k3s-apps
+  merge remains the only gate.
+- **Rollout order:** merge and let CI apply the k3s-apps PR first, so
+  Terraform drops the objects from state; then `scripts/update.sh apply`
+  here. Argo CD adopts the running objects on its first sync.
+- **Removing it:** see k3s-apps' docs, "Argo CD", to hand the landing
+  page back to Terraform first, then delete `argocd.tf`; the uninstall
+  removes the CRDs too (`crds.keep = false`).
 
 ## State
 
