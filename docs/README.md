@@ -210,10 +210,11 @@ included (both `enforce: restricted`). `k3s-apps-ci`
 has a Role in each with only the kinds its modules create. Headlamp's
 ServiceAccount lives in `apps`, with cluster-wide read access only.
 
-`node-exporter` holds only k3s-apps' node-exporter DaemonSet, which needs
-the host's network, PID namespace and root filesystem; it is labelled
-`enforce: privileged` like `ci`. `k3s-apps-ci` gets a Role there for
-DaemonSets only.
+`node-exporter` holds only the node-exporter DaemonSet (`node_exporter.tf`,
+imported from k3s-apps), which needs the host's network, PID namespace
+and root filesystem; it is labelled `enforce: privileged` like `ci`.
+`k3s-apps-ci`'s Role there (DaemonSets only) goes with the rest of
+k3s-apps' CI once its Terraform is gone.
 
 ## RBAC
 
@@ -241,8 +242,8 @@ here, while `k3s-apps` only references them by name in Pod specs.
   to wait until Stalwart has stopped (RBAC can't narrow `list` to a
   label). RocksDB is only consistent on disk while Stalwart is down, so
   k3s-apps' nightly backup CronJob scales it to 0 and back.
-- **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` and
-  `monitoring` its application controller may read every kind it deploys
+- **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps`, `auth`
+  and `monitoring` its application controller may read every kind it deploys
   anywhere (its cache lists each kind in each namespace), create the
   kinds it deploys in that namespace (PVCs excepted), but update, patch or delete only the
   objects named in `local.argocd_objects` (PVCs: never delete); its
@@ -280,11 +281,11 @@ release because Helm can't map an Application before its CRD exists.
 - **Without the UI:** `k3s-tunnel`, then, with the `argocd` CLI,
   `KUBECONFIG=~/.kube/k3s-node-1.yaml argocd admin dashboard -n argocd`
   runs one locally with your kubeconfig.
-- **Scope:** the in-cluster cluster Secret restricts Argo CD to `apps` and
-  `monitoring` (`local.argocd_namespaces`) and no cluster-scoped
+- **Scope:** the in-cluster cluster Secret restricts Argo CD to `apps`,
+  `auth` and `monitoring` (`local.argocd_namespaces`) and no cluster-scoped
   resources; `resource.inclusions` and the AppProject both allow only
-  the kinds in `local.argocd_objects` (ConfigMap, Service, Deployment,
-  CronJob, NetworkPolicy, PersistentVolumeClaim).
+  the kinds in `local.argocd_objects` (ConfigMap, Service, Endpoints,
+  Deployment, CronJob, NetworkPolicy, PersistentVolumeClaim).
   The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
   reaches no further. A new app adds its directory to
