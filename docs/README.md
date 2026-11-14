@@ -242,8 +242,9 @@ here, while `k3s-apps` only references them by name in Pod specs.
   label). RocksDB is only consistent on disk while Stalwart is down, so
   k3s-apps' nightly backup CronJob scales it to 0 and back.
 - **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` and
-  `monitoring` its application controller may list the kinds it deploys
-  and create them (PVCs excepted), but update, patch or delete only the
+  `monitoring` its application controller may read every kind it deploys
+  anywhere (its cache lists each kind in each namespace), create the
+  kinds it deploys in that namespace (PVCs excepted), but update, patch or delete only the
   objects named in `local.argocd_objects` (PVCs: never delete); its
   server may only read them, plus list each namespace's Events for the UI. See
   "Argo CD".

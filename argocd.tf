@@ -52,6 +52,12 @@ locals {
   argocd_kinds = distinct(flatten([
     for objects in values(local.argocd_objects) : [for o in values(objects) : { api_group = o.api_group, kind = o.kind }]
   ]))
+
+  # Argo CD's cache lists every kind above in every namespace it manages, so reading must cover them all everywhere.
+  argocd_read = {
+    api_groups = distinct([for k in local.argocd_kinds : k.api_group])
+    resources  = distinct(flatten([for objects in values(local.argocd_objects) : keys(objects)]))
+  }
 }
 
 resource "kubernetes_namespace_v1" "argocd" {
@@ -242,8 +248,8 @@ resource "kubernetes_role_v1" "argocd_controller" {
   }
 
   rule {
-    api_groups = distinct([for o in each.value : o.api_group])
-    resources  = keys(each.value)
+    api_groups = local.argocd_read.api_groups
+    resources  = local.argocd_read.resources
     verbs      = ["get", "list", "watch"]
   }
   # create can't be limited by name; changing or deleting anything else in the namespace stays forbidden.
@@ -297,8 +303,8 @@ resource "kubernetes_role_v1" "argocd_server" {
   }
 
   rule {
-    api_groups = distinct([for o in each.value : o.api_group])
-    resources  = keys(each.value)
+    api_groups = local.argocd_read.api_groups
+    resources  = local.argocd_read.resources
     verbs      = ["get", "list", "watch"]
   }
   # The UI's Events tab per resource.
