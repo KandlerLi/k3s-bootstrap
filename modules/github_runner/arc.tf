@@ -183,8 +183,8 @@ resource "helm_release" "arc_scale_set" {
               failureThreshold = 120
             }
             resources = {
-              requests = { cpu = "100m", memory = "256Mi" }
-              limits   = { cpu = "1000m", memory = "768Mi" }
+              requests = { cpu = "400m", memory = "256Mi" }
+              limits   = { cpu = "1500m", memory = "768Mi" }
             }
             volumeMounts = [
               { name = "work", mountPath = "/actions-runner/_work" },
@@ -207,7 +207,7 @@ resource "helm_release" "arc_scale_set" {
             { name = "DOCKER_HOST", value = "unix:///var/run/docker.sock" },
           ]
           resources = {
-            requests = { cpu = "400m", memory = each.value.memory_request }
+            requests = { cpu = "500m", memory = each.value.memory_request }
             limits   = { cpu = "2000m", memory = "1Gi" }
           }
           volumeMounts = [
