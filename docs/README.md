@@ -291,15 +291,18 @@ release because Helm can't map an Application before its CRD exists.
   `auth` and `monitoring` (`local.argocd_namespaces`) and no cluster-scoped
   resources; `resource.inclusions` and the AppProject both allow only
   the kinds in `local.argocd_objects` (ConfigMap, Service,
-  Deployment, CronJob, NetworkPolicy, PersistentVolumeClaim).
+  Deployment, CronJob, NetworkPolicy, ExternalSecret, PersistentVolumeClaim).
   The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
   reaches no further. A new app adds its directory to
   `local.argocd_applications` and its object names to
   `local.argocd_objects`; an Application whose directory isn't on
   k3s-apps' `main` yet only shows a path error and syncs nothing.
-- **Secrets stay in k3s-apps' Terraform**, with the PVCs: Argo CD has no
-  rule on Secrets at all.
+- **Argo CD never touches Secrets:** it has no rule on them at all. An
+  app's Secrets come either from k3s-apps' Terraform or, once moved, from
+  an ExternalSecret next to the app, which ESO turns into the Secret (see
+  "External Secrets"). Argo CD manages only the ExternalSecret, which
+  names keys, never values.
 - **Data:** every app's PVCs are Argo CD's too. The Role grants no
   `delete` on PVCs (`create` stays, for a rebuilt cluster), only
   `update`/`patch` by name, and the manifests carry
