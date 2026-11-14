@@ -300,7 +300,8 @@ release because Helm can't map an Application before its CRD exists.
   `Prune=false,Delete=false`. The source is the public k3s-apps repository, so
   no repository credential exists.
 - **Sync:** automated with prune and self-heal on `main`, so the k3s-apps
-  merge remains the only gate.
+  merge remains the only gate. A failed sync retries five times (30 s
+  doubling to 10 min); Argo CD otherwise tries each commit only once.
 - **Removing it:** see k3s-apps' docs, "Argo CD", to hand the landing
   page back to Terraform first, then delete `argocd.tf` and the route;
   the uninstall removes the CRDs too (`crds.keep = false`).
