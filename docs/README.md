@@ -262,7 +262,7 @@ here, while `k3s-apps` only references them by name in Pod specs.
 ## Argo CD
 
 `argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/<app>`
-(landing page, Headlamp, qBittorrent, Bulwark; one Application each,
+(landing page, Headlamp, qBittorrent, Bulwark, home_agent; one Application each,
 `local.argocd_applications`) instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
 home-infra-docs). Chart `argo-cd`, plus `argocd-apps` for the
 `k3s-apps` AppProject and the Applications; it is a second

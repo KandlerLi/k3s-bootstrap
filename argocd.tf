@@ -11,13 +11,13 @@ locals {
   argocd_url    = "https://argo.jkandler.de"
 
   # One Application per directory under k3s-apps' argocd/.
-  argocd_applications = ["landing-page", "headlamp", "qbittorrent", "bulwark"]
+  argocd_applications = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent"]
 
   # Everything Argo CD may write in apps, by name; PVCs hold data, so Argo CD never creates or deletes one.
   argocd_apps_objects = {
-    configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config"] }
-    services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc"] }
-    deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark"] }
+    configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config", "nextcloud-tools-source"] }
+    services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc"] }
+    deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent"] }
     networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create_delete = true, names = ["qbittorrent"] }
     persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create_delete = false, names = ["deluge-downloads", "deluge-config"] }
   }
