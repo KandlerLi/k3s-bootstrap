@@ -142,6 +142,7 @@ resource "helm_release" "arc_scale_set" {
         labels = merge(
           { "github-runner" = "true" },
           each.value.service_account_name != null ? { "github-runner-cluster-access" = "true" } : {},
+          contains(var.github_runner_stalwart_api_repositories, each.key) ? { "github-runner-stalwart-api" = "true" } : {},
         )
       }
       spec = merge(local.node_2_placement, {

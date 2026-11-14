@@ -117,3 +117,9 @@ variable "github_runner_memory_requests" {
   type        = map(string)
   default     = {}
 }
+
+variable "github_runner_stalwart_api_repositories" {
+  description = "Repository ids whose runner Pods may reach Stalwart's management API (and nothing else in the cluster)."
+  type        = list(string)
+  default     = []
+}

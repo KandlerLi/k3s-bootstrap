@@ -79,6 +79,8 @@ module "github_runner" {
   github_runner_service_accounts = {
     k3s-apps = kubernetes_service_account_v1.k3s_apps_ci.metadata[0].name
   }
+
+  github_runner_stalwart_api_repositories = ["stalwart-config"]
 }
 
 # The ServiceAccount k3s-apps' CI runs as: see README, "RBAC".
