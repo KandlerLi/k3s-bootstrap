@@ -1,4 +1,4 @@
-# Argo CD: syncs k3s-apps' argocd/<app> into apps; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
+# Argo CD: syncs k3s-apps' argocd/<app> into apps and monitoring; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
 
 locals {
   argocd_image       = "quay.io/argoproj/argocd:v3.5.6@sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335"
@@ -10,17 +10,48 @@ locals {
   argocd_server = "https://kubernetes.default.svc"
   argocd_url    = "https://argo.jkandler.de"
 
-  # One Application per directory under k3s-apps' argocd/.
-  argocd_applications = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent"]
-
-  # Everything Argo CD may write in apps, by name; PVCs hold data, so Argo CD never creates or deletes one.
-  argocd_apps_objects = {
-    configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config", "nextcloud-tools-source"] }
-    services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc"] }
-    deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent"] }
-    networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create_delete = true, names = ["qbittorrent"] }
-    persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create_delete = false, names = ["deluge-downloads", "deluge-config"] }
+  # One Application per directory under k3s-apps' argocd/, with its namespace.
+  argocd_applications = {
+    landing-page  = "apps"
+    headlamp      = "apps"
+    qbittorrent   = "apps"
+    bulwark       = "apps"
+    home-agent    = "apps"
+    open-webui    = "apps"
+    sankey-export = "apps"
+    vaultwarden   = "apps"
+    paperless     = "apps"
+    stalwart      = "apps"
+    alertmanager  = "monitoring"
+    grafana       = "monitoring"
   }
+
+  argocd_namespaces = {
+    apps       = kubernetes_namespace_v1.apps.metadata[0].name
+    monitoring = kubernetes_namespace_v1.monitoring.metadata[0].name
+  }
+
+  # Everything Argo CD may write, per namespace and by name; PVCs hold data, so Argo CD never creates or deletes one.
+  argocd_objects = {
+    apps = {
+      configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config", "nextcloud-tools-source"] }
+      services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc", "open-webui-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal"] }
+      deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent", "open-webui", "vaultwarden", "paperless", "stalwart"] }
+      cronjobs               = { api_group = "batch", kind = "CronJob", create_delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup"] }
+      networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create_delete = true, names = ["qbittorrent", "vaultwarden"] }
+      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create_delete = false, names = ["deluge-downloads", "deluge-config"] }
+    }
+    monitoring = {
+      configmaps  = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["grafana-dashboard-provider", "grafana-dashboards"] }
+      services    = { api_group = "", kind = "Service", create_delete = true, names = ["alertmanager-svc", "grafana-svc"] }
+      deployments = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["alertmanager", "grafana"] }
+    }
+  }
+
+  # Every kind Argo CD handles in any namespace.
+  argocd_kinds = distinct(flatten([
+    for objects in values(local.argocd_objects) : [for o in values(objects) : { api_group = o.api_group, kind = o.kind }]
+  ]))
 }
 
 resource "kubernetes_namespace_v1" "argocd" {
@@ -82,7 +113,7 @@ resource "helm_release" "argocd" {
           requestedScopes          = ["openid", "profile", "email", "groups"]
         })
         "resource.inclusions" = yamlencode([
-          for o in local.argocd_apps_objects : { apiGroups = [o.api_group], kinds = [o.kind], clusters = ["*"] }
+          for k in local.argocd_kinds : { apiGroups = [k.api_group], kinds = [k.kind], clusters = ["*"] }
         ])
       }
       # Traefik terminates TLS.
@@ -96,7 +127,7 @@ resource "helm_release" "argocd" {
       clusterCredentials = {
         in-cluster = {
           server     = local.argocd_server
-          namespaces = kubernetes_namespace_v1.apps.metadata[0].name
+          namespaces = join(",", values(local.argocd_namespaces))
           config     = { tlsClientConfig = { insecure = false } }
         }
       }
@@ -157,15 +188,15 @@ resource "helm_release" "argocd_apps" {
         namespace    = kubernetes_namespace_v1.argocd.metadata[0].name
         description  = "Manifests under k3s-apps' argocd/"
         sourceRepos  = ["https://github.com/KandlerLi/k3s-apps.git"]
-        destinations = [{ server = local.argocd_server, namespace = kubernetes_namespace_v1.apps.metadata[0].name }]
+        destinations = [for ns in values(local.argocd_namespaces) : { server = local.argocd_server, namespace = ns }]
 
         clusterResourceWhitelist   = []
-        namespaceResourceWhitelist = [for o in local.argocd_apps_objects : { group = o.api_group, kind = o.kind }]
+        namespaceResourceWhitelist = [for k in local.argocd_kinds : { group = k.api_group, kind = k.kind }]
       }
     }
     # No finalizer: deleting the Application leaves its objects running.
     applications = {
-      for app in local.argocd_applications : app => {
+      for app, ns in local.argocd_applications : app => {
         namespace = kubernetes_namespace_v1.argocd.metadata[0].name
         project   = "k3s-apps"
         source = {
@@ -173,7 +204,7 @@ resource "helm_release" "argocd_apps" {
           targetRevision = "main"
           path           = "argocd/${app}"
         }
-        destination = { server = local.argocd_server, namespace = kubernetes_namespace_v1.apps.metadata[0].name }
+        destination = { server = local.argocd_server, namespace = local.argocd_namespaces[ns] }
         syncPolicy = {
           automated = { prune = true, selfHeal = true }
         }
@@ -182,20 +213,42 @@ resource "helm_release" "argocd_apps" {
   })]
 }
 
-resource "kubernetes_role_v1" "argocd_apps" {
+moved {
+  from = kubernetes_role_v1.argocd_apps
+  to   = kubernetes_role_v1.argocd_controller["apps"]
+}
+
+moved {
+  from = kubernetes_role_binding_v1.argocd_apps
+  to   = kubernetes_role_binding_v1.argocd_controller["apps"]
+}
+
+moved {
+  from = kubernetes_role_v1.argocd_server_apps
+  to   = kubernetes_role_v1.argocd_server["apps"]
+}
+
+moved {
+  from = kubernetes_role_binding_v1.argocd_server_apps
+  to   = kubernetes_role_binding_v1.argocd_server["apps"]
+}
+
+resource "kubernetes_role_v1" "argocd_controller" {
+  for_each = local.argocd_objects
+
   metadata {
     name      = "argocd-application-controller"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = local.argocd_namespaces[each.key]
   }
 
   rule {
-    api_groups = distinct([for o in local.argocd_apps_objects : o.api_group])
-    resources  = keys(local.argocd_apps_objects)
+    api_groups = distinct([for o in each.value : o.api_group])
+    resources  = keys(each.value)
     verbs      = ["get", "list", "watch"]
   }
-  # create can't be limited by name; changing or deleting anything else in apps stays forbidden.
+  # create can't be limited by name; changing or deleting anything else in the namespace stays forbidden.
   dynamic "rule" {
-    for_each = { for k, o in local.argocd_apps_objects : k => o if o.create_delete }
+    for_each = { for k, o in each.value : k => o if o.create_delete }
     content {
       api_groups = [rule.value.api_group]
       resources  = [rule.key]
@@ -203,7 +256,7 @@ resource "kubernetes_role_v1" "argocd_apps" {
     }
   }
   dynamic "rule" {
-    for_each = local.argocd_apps_objects
+    for_each = each.value
     content {
       api_groups     = [rule.value.api_group]
       resources      = [rule.key]
@@ -213,16 +266,18 @@ resource "kubernetes_role_v1" "argocd_apps" {
   }
 }
 
-resource "kubernetes_role_binding_v1" "argocd_apps" {
+resource "kubernetes_role_binding_v1" "argocd_controller" {
+  for_each = local.argocd_objects
+
   metadata {
     name      = "argocd-application-controller"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = local.argocd_namespaces[each.key]
   }
 
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "Role"
-    name      = kubernetes_role_v1.argocd_apps.metadata[0].name
+    name      = kubernetes_role_v1.argocd_controller[each.key].metadata[0].name
   }
 
   subject {
@@ -233,15 +288,17 @@ resource "kubernetes_role_binding_v1" "argocd_apps" {
 }
 
 # The UI shows live objects through the server's own ServiceAccount; read-only, syncs run in the controller.
-resource "kubernetes_role_v1" "argocd_server_apps" {
+resource "kubernetes_role_v1" "argocd_server" {
+  for_each = local.argocd_objects
+
   metadata {
     name      = "argocd-server"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = local.argocd_namespaces[each.key]
   }
 
   rule {
-    api_groups = distinct([for o in local.argocd_apps_objects : o.api_group])
-    resources  = keys(local.argocd_apps_objects)
+    api_groups = distinct([for o in each.value : o.api_group])
+    resources  = keys(each.value)
     verbs      = ["get", "list", "watch"]
   }
   # The UI's Events tab per resource.
@@ -252,16 +309,18 @@ resource "kubernetes_role_v1" "argocd_server_apps" {
   }
 }
 
-resource "kubernetes_role_binding_v1" "argocd_server_apps" {
+resource "kubernetes_role_binding_v1" "argocd_server" {
+  for_each = local.argocd_objects
+
   metadata {
     name      = "argocd-server"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = local.argocd_namespaces[each.key]
   }
 
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "Role"
-    name      = kubernetes_role_v1.argocd_server_apps.metadata[0].name
+    name      = kubernetes_role_v1.argocd_server[each.key].metadata[0].name
   }
 
   subject {
