@@ -245,7 +245,7 @@ here, while `k3s-apps` only references them by name in Pod specs.
 - **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps`, `auth`
   and `monitoring` its application controller may read every kind it deploys
   anywhere (its cache lists each kind in each namespace), create the
-  kinds it deploys in that namespace (PVCs excepted), but update, patch or delete only the
+  kinds it deploys in that namespace, but update, patch or delete only the
   objects named in `local.argocd_objects` (PVCs: never delete); its
   server may only read them, plus list each namespace's Events for the UI. See
   "Argo CD".
@@ -294,9 +294,10 @@ release because Helm can't map an Application before its CRD exists.
   k3s-apps' `main` yet only shows a path error and syncs nothing.
 - **Secrets stay in k3s-apps' Terraform**, with the PVCs: Argo CD has no
   rule on Secrets at all.
-- **Data:** PVCs hold qBittorrent's downloads and config. The Role grants
-  no `create` or `delete` on PVCs, only `update`/`patch` by name, and the
-  manifests carry `Prune=false,Delete=false`. The source is the public k3s-apps repository, so
+- **Data:** every app's PVCs are Argo CD's too. The Role grants no
+  `delete` on PVCs (`create` stays, for a rebuilt cluster), only
+  `update`/`patch` by name, and the manifests carry
+  `Prune=false,Delete=false`. The source is the public k3s-apps repository, so
   no repository credential exists.
 - **Sync:** automated with prune and self-heal on `main`, so the k3s-apps
   merge remains the only gate.
