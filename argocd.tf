@@ -40,9 +40,8 @@ locals {
   argocd_objects = {
     apps = {
       configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "qbittorrent-config", "nextcloud-tools-source", "ingress-static-config", "ingress-dynamic-config"] }
-      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc", "open-webui-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "nextcloud-aio-backend", "blocky-svc"] }
+      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc", "open-webui-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc"] }
       deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent", "open-webui", "vaultwarden", "paperless", "stalwart", "ingress", "blocky"] }
-      endpoints              = { api_group = "", kind = "Endpoints", create = true, delete = true, names = ["nextcloud-aio-backend"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup"] }
       networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create = true, delete = true, names = ["qbittorrent", "vaultwarden"] }
       persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["deluge-downloads", "deluge-config", "blocky-postgres", "bulwark", "ingress-acme", "open-webui-data", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup"] }

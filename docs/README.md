@@ -286,7 +286,7 @@ release because Helm can't map an Application before its CRD exists.
 - **Scope:** the in-cluster cluster Secret restricts Argo CD to `apps`,
   `auth` and `monitoring` (`local.argocd_namespaces`) and no cluster-scoped
   resources; `resource.inclusions` and the AppProject both allow only
-  the kinds in `local.argocd_objects` (ConfigMap, Service, Endpoints,
+  the kinds in `local.argocd_objects` (ConfigMap, Service,
   Deployment, CronJob, NetworkPolicy, PersistentVolumeClaim).
   The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
