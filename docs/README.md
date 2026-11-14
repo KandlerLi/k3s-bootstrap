@@ -312,6 +312,32 @@ release because Helm can't map an Application before its CRD exists.
   page back to Terraform first, then delete `argocd.tf` and the route;
   the uninstall removes the CRDs too (`crds.keep = false`).
 
+## External Secrets
+
+`eso.tf` installs the External Secrets Operator (ESO) and Reloader for
+[ADR 0032](https://github.com/KandlerLi/home-infra-docs/blob/main/docs/adr/0032-cluster-secrets-through-external-secrets.md):
+Kubernetes Secrets come from AWS Secrets Manager instead of a Terraform apply.
+
+- **One instance per namespace** (`apps`, `auth`, `monitoring`), each with
+  Roles in its own namespace only and no ClusterRole, so neither can touch
+  Secrets in `kube-system`, `argocd`, `ci` or `arc-system`. The CRDs
+  (namespaced kinds only) sit in their own release, `external-secrets-crds`,
+  so removing one controller never deletes every ExternalSecret. No
+  validating webhook: it needs cluster-scoped access.
+- **AWS login.** Each namespace's `external-secrets` ServiceAccount carries
+  `eks.amazonaws.com/role-arn` for `terraform-state`'s `k3s-eso-<namespace>`
+  role; ESO exchanges a ServiceAccount token (audience `sts.amazonaws.com`,
+  issuer = k3s' public issuer) for that role. The role may read only the
+  Secrets Manager groups that namespace's Pods use (`terraform-state`,
+  "k3s OIDC federation").
+- **SecretStore** `aws-secrets-manager` in each namespace, created here,
+  never by Argo CD: it binds the namespace to its role. The ExternalSecrets
+  themselves live next to each app in `k3s-apps`' `argocd/`.
+- **Reloader** restarts a Deployment that carries
+  `secret.reloader.stakater.com/reload: <secret>` when that Secret changes,
+  via a pod-template annotation (`reloadStrategy: annotations`), which Argo
+  CD leaves alone. It watches Secrets only, not ConfigMaps, Jobs or CronJobs.
+
 ## State
 
 ```text
