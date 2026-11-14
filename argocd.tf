@@ -244,6 +244,12 @@ resource "kubernetes_role_v1" "argocd_server_apps" {
     resources  = keys(local.argocd_apps_objects)
     verbs      = ["get", "list", "watch"]
   }
+  # The UI's Events tab per resource.
+  rule {
+    api_groups = [""]
+    resources  = ["events"]
+    verbs      = ["list"]
+  }
 }
 
 resource "kubernetes_role_binding_v1" "argocd_server_apps" {

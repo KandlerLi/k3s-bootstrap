@@ -245,7 +245,7 @@ here, while `k3s-apps` only references them by name in Pod specs.
   application controller may list the kinds it deploys and create them
   (PVCs excepted), but update, patch or delete only the objects named in
   `local.argocd_apps_objects` (PVCs: never delete); its server may only
-  read them. See
+  read them, plus list the namespace's Events for the UI. See
   "Argo CD".
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
