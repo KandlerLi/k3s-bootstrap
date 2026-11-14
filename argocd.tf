@@ -225,6 +225,11 @@ resource "helm_release" "argocd_apps" {
         destination = { server = local.argocd_server, namespace = local.argocd_namespaces[ns] }
         syncPolicy = {
           automated = { prune = true, selfHeal = true }
+          # Automated sync tries each commit once; retries let a transient failure (RBAC not applied yet) heal itself.
+          retry = {
+            limit   = 5
+            backoff = { duration = "30s", factor = 2, maxDuration = "10m" }
+          }
         }
       }
     }
