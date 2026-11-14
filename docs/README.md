@@ -70,9 +70,13 @@ learning cluster") and `decisions.md`.
 
 - **Concurrency.** `maxRunners` (`github_runner_max_runners_per_repository`)
   is only an upper bound. The real limit is node-2. Every runner Pod
-  requests 500m CPU (runner 400m + dind 100m), so about three jobs fit on
-  its two cores. Further Pods stay `Pending` and their jobs wait in
-  GitHub's queue rather than overloading the VM (tracker #12). Memory
+  requests 900m CPU (runner 500m + dind 400m), so four jobs fit on its
+  four vCPUs (3600m plus ~60m for the controller, listeners and
+  node-exporter). The requests follow the measured p95 per container
+  (runner 0.82, dind 0.64 cores); dind's limit is 1500m because at
+  1000m it was throttled in up to 57 % of periods (tracker #57). Further
+  Pods stay `Pending` and their jobs wait in GitHub's queue rather than
+  overloading the VM (tracker #12). Memory
   requests come from the 7-day peak per Pod: 384Mi + 256Mi by default,
   1Gi for `k3s-apps`' runner (`github_runner_memory_requests`).
 - **Labels.** Every scale set registers `self-hosted, home, debian`, so
