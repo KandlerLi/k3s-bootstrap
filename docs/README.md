@@ -241,11 +241,11 @@ here, while `k3s-apps` only references them by name in Pod specs.
   to wait until Stalwart has stopped (RBAC can't narrow `list` to a
   label). RocksDB is only consistent on disk while Stalwart is down, so
   k3s-apps' nightly backup CronJob scales it to 0 and back.
-- **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` its
-  application controller may list the kinds it deploys and create them
-  (PVCs excepted), but update, patch or delete only the objects named in
-  `local.argocd_apps_objects` (PVCs: never delete); its server may only
-  read them, plus list the namespace's Events for the UI. See
+- **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps` and
+  `monitoring` its application controller may list the kinds it deploys
+  and create them (PVCs excepted), but update, patch or delete only the
+  objects named in `local.argocd_objects` (PVCs: never delete); its
+  server may only read them, plus list each namespace's Events for the UI. See
   "Argo CD".
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
@@ -261,9 +261,9 @@ here, while `k3s-apps` only references them by name in Pod specs.
 
 ## Argo CD
 
-`argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/<app>`
-(landing page, Headlamp, qBittorrent, Bulwark, home_agent; one Application each,
-`local.argocd_applications`) instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
+`argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/<app>` (one
+Application each, `local.argocd_applications`, with its namespace)
+instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
 home-infra-docs). Chart `argo-cd`, plus `argocd-apps` for the
 `k3s-apps` AppProject and the Applications; it is a second
 release because Helm can't map an Application before its CRD exists.
@@ -279,14 +279,19 @@ release because Helm can't map an Application before its CRD exists.
 - **Without the UI:** `k3s-tunnel`, then, with the `argocd` CLI,
   `KUBECONFIG=~/.kube/k3s-node-1.yaml argocd admin dashboard -n argocd`
   runs one locally with your kubeconfig.
-- **Scope:** the in-cluster cluster Secret restricts Argo CD to the `apps`
-  namespace and no cluster-scoped resources; `resource.inclusions` and
-  the AppProject both allow only the kinds in `local.argocd_apps_objects`
-  (ConfigMap, Service, Deployment, NetworkPolicy, PersistentVolumeClaim).
+- **Scope:** the in-cluster cluster Secret restricts Argo CD to `apps` and
+  `monitoring` (`local.argocd_namespaces`) and no cluster-scoped
+  resources; `resource.inclusions` and the AppProject both allow only
+  the kinds in `local.argocd_objects` (ConfigMap, Service, Deployment,
+  CronJob, NetworkPolicy, PersistentVolumeClaim).
   The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
   reaches no further. A new app adds its directory to
-  `local.argocd_applications` and its object names here.
+  `local.argocd_applications` and its object names to
+  `local.argocd_objects`; an Application whose directory isn't on
+  k3s-apps' `main` yet only shows a path error and syncs nothing.
+- **Secrets stay in k3s-apps' Terraform**, with the PVCs: Argo CD has no
+  rule on Secrets at all.
 - **Data:** PVCs hold qBittorrent's downloads and config. The Role grants
   no `create` or `delete` on PVCs, only `update`/`patch` by name, and the
   manifests carry `Prune=false,Delete=false`. The source is the public k3s-apps repository, so
