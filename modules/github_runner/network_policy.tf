@@ -135,3 +135,34 @@ moved {
   from = kubernetes_network_policy_v1.github_runner_cluster_access[0]
   to   = kubernetes_network_policy_v1.github_runner_cluster_access
 }
+
+# stalwart-config applies Stalwart's settings through its API: that one port, no Kubernetes API.
+resource "kubernetes_network_policy_v1" "github_runner_stalwart_api" {
+  metadata {
+    name      = "github-runner-stalwart-api"
+    namespace = var.namespace
+  }
+
+  spec {
+    pod_selector {
+      match_labels = { "github-runner-stalwart-api" = "true" }
+    }
+
+    policy_types = ["Egress"]
+
+    egress {
+      to {
+        namespace_selector {
+          match_labels = { "kubernetes.io/metadata.name" = "apps" }
+        }
+        pod_selector {
+          match_labels = { app = "stalwart" }
+        }
+      }
+      ports {
+        protocol = "TCP"
+        port     = "8080"
+      }
+    }
+  }
+}

@@ -142,6 +142,8 @@ learning cluster") and `decisions.md`.
   Postgres/API and Grafana for the password rotation. Enforced by k3s's
   embedded network-policy controller, selected by the Pod labels
   `github-runner: "true"` and `github-runner-cluster-access: "true"`.
+  `stalwart-config`'s runners (`github-runner-stalwart-api: "true"`) reach
+  only Stalwart's management API on 8080, no Kubernetes API.
 
 ## Storage
 
