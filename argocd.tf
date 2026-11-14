@@ -1,4 +1,4 @@
-# Argo CD: syncs k3s-apps' argocd/<app> into apps and monitoring; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
+# Argo CD: syncs k3s-apps' argocd/<app> into apps, auth and monitoring; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
 
 locals {
   argocd_image       = "quay.io/argoproj/argocd:v3.5.6@sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335"
@@ -12,39 +12,50 @@ locals {
 
   # One Application per directory under k3s-apps' argocd/, with its namespace.
   argocd_applications = {
-    landing-page  = "apps"
-    headlamp      = "apps"
-    qbittorrent   = "apps"
-    bulwark       = "apps"
-    home-agent    = "apps"
-    open-webui    = "apps"
-    sankey-export = "apps"
-    vaultwarden   = "apps"
-    paperless     = "apps"
-    stalwart      = "apps"
-    alertmanager  = "monitoring"
-    grafana       = "monitoring"
+    landing-page       = "apps"
+    headlamp           = "apps"
+    qbittorrent        = "apps"
+    bulwark            = "apps"
+    home-agent         = "apps"
+    open-webui         = "apps"
+    sankey-export      = "apps"
+    vaultwarden        = "apps"
+    paperless          = "apps"
+    stalwart           = "apps"
+    ingress            = "apps"
+    blocky             = "apps"
+    authelia           = "auth"
+    alertmanager       = "monitoring"
+    grafana            = "monitoring"
+    kube-state-metrics = "monitoring"
   }
 
   argocd_namespaces = {
     apps       = kubernetes_namespace_v1.apps.metadata[0].name
+    auth       = kubernetes_namespace_v1.auth.metadata[0].name
     monitoring = kubernetes_namespace_v1.monitoring.metadata[0].name
   }
 
   # Everything Argo CD may write, per namespace and by name; PVCs hold data, so Argo CD never creates or deletes one.
   argocd_objects = {
     apps = {
-      configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config", "nextcloud-tools-source"] }
-      services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc", "open-webui-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal"] }
-      deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent", "open-webui", "vaultwarden", "paperless", "stalwart"] }
+      configmaps             = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["landing-page-html", "qbittorrent-config", "nextcloud-tools-source", "ingress-static-config", "ingress-dynamic-config"] }
+      services               = { api_group = "", kind = "Service", create_delete = true, names = ["landing-page-svc", "headlamp", "qbittorrent-web-svc", "qbittorrent-peer-svc", "bulwark-svc", "home-agent-svc", "open-webui-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "nextcloud-aio-backend", "blocky-svc"] }
+      deployments            = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent", "open-webui", "vaultwarden", "paperless", "stalwart", "ingress", "blocky"] }
+      endpoints              = { api_group = "", kind = "Endpoints", create_delete = true, names = ["nextcloud-aio-backend"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create_delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup"] }
       networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create_delete = true, names = ["qbittorrent", "vaultwarden"] }
       persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create_delete = false, names = ["deluge-downloads", "deluge-config"] }
     }
+    auth = {
+      services    = { api_group = "", kind = "Service", create_delete = true, names = ["authelia-svc"] }
+      deployments = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["authelia"] }
+      cronjobs    = { api_group = "batch", kind = "CronJob", create_delete = true, names = ["authelia-backup"] }
+    }
     monitoring = {
       configmaps  = { api_group = "", kind = "ConfigMap", create_delete = true, names = ["grafana-dashboard-provider", "grafana-dashboards"] }
-      services    = { api_group = "", kind = "Service", create_delete = true, names = ["alertmanager-svc", "grafana-svc"] }
-      deployments = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["alertmanager", "grafana"] }
+      services    = { api_group = "", kind = "Service", create_delete = true, names = ["alertmanager-svc", "grafana-svc", "kube-state-metrics-svc"] }
+      deployments = { api_group = "apps", kind = "Deployment", create_delete = true, names = ["alertmanager", "grafana", "kube-state-metrics"] }
     }
   }
 
