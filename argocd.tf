@@ -49,6 +49,7 @@ locals {
     }
     auth = {
       services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["authelia-svc"] }
+      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["authelia-config", "authelia-users"] }
       deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["authelia"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["authelia-backup"] }
       persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["authelia-data", "authelia-redis", "authelia-backup"] }
