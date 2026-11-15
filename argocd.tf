@@ -44,7 +44,7 @@ locals {
       deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "qbittorrent", "bulwark", "home-agent", "open-webui", "vaultwarden", "paperless", "stalwart", "ingress", "blocky"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup"] }
       networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create = true, delete = true, names = ["qbittorrent", "vaultwarden"] }
-      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["bulwark-session", "bulwark-oidc", "sankey-export-app-password", "sankey-export-ghcr-pull-secret", "open-webui-oidc-client-secret", "vaultwarden-sso"] }
+      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["bulwark-session", "bulwark-oidc", "sankey-export-app-password", "sankey-export-ghcr-pull-secret", "open-webui-oidc-client-secret", "vaultwarden-sso", "home-agent-openai-api-key", "home-agent-anthropic-api-key", "nextcloud-tools-app-password", "ghcr-pull-secret"] }
       persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["deluge-downloads", "deluge-config", "blocky-postgres", "bulwark", "ingress-acme", "open-webui-data", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup"] }
     }
     auth = {
