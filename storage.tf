@@ -1,59 +1,5 @@
 # Static NFS PVs live here, not in k3s-apps: see README, "Storage".
 
-resource "kubernetes_persistent_volume_v1" "deluge_downloads" {
-  metadata {
-    name = "deluge-downloads-pv"
-  }
-
-  spec {
-    capacity = {
-      storage = "500Gi"
-    }
-    access_modes                     = ["ReadWriteMany"]
-    persistent_volume_reclaim_policy = "Retain"
-    storage_class_name               = "local-path"
-
-    persistent_volume_source {
-      nfs {
-        server = "192.168.101.1"
-        path   = "/mnt/black-hdd/downloads"
-      }
-    }
-
-    claim_ref {
-      namespace = "apps"
-      name      = "deluge-downloads"
-    }
-  }
-}
-
-resource "kubernetes_persistent_volume_v1" "deluge_config" {
-  metadata {
-    name = "deluge-config-pv"
-  }
-
-  spec {
-    capacity = {
-      storage = "1Gi"
-    }
-    access_modes                     = ["ReadWriteMany"]
-    persistent_volume_reclaim_policy = "Retain"
-    storage_class_name               = "local-path"
-
-    persistent_volume_source {
-      nfs {
-        server = "192.168.101.1"
-        path   = "/mnt/black-hdd/deluge-config"
-      }
-    }
-
-    claim_ref {
-      namespace = "apps"
-      name      = "deluge-config"
-    }
-  }
-}
-
 # Target of k3s-apps' Authelia backup CronJob, on the homeserver's disk.
 resource "kubernetes_persistent_volume_v1" "authelia_backup" {
   metadata {
