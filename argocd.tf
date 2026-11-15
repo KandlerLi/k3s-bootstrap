@@ -55,7 +55,7 @@ locals {
     }
     monitoring = {
       configmaps      = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["grafana-dashboard-provider", "grafana-dashboards"] }
-      externalsecrets = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["grafana-admin-password", "grafana-oidc-client-secret", "grafana-datasources"] }
+      externalsecrets = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["grafana-admin-password", "grafana-oidc-client-secret", "grafana-datasources", "alertmanager-config"] }
       services        = { api_group = "", kind = "Service", create = true, delete = true, names = ["alertmanager-svc", "grafana-svc", "kube-state-metrics-svc"] }
       deployments     = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["alertmanager", "grafana", "kube-state-metrics"] }
     }
