@@ -13,9 +13,8 @@ locals {
   # self-hosted is not implicit on scale sets (tracker #39 probe), so it is listed like the others.
   github_runner_scale_sets = {
     for repo in var.github_runner_repositories : repo.id => {
-      repository           = repo.repository
-      service_account_name = try(var.github_runner_service_accounts[repo.id], null)
-      memory_request       = try(var.github_runner_memory_requests[repo.id], "384Mi")
+      repository     = repo.repository
+      memory_request = try(var.github_runner_memory_requests[repo.id], "384Mi")
     }
   }
 
@@ -141,14 +140,12 @@ resource "helm_release" "arc_scale_set" {
       metadata = {
         labels = merge(
           { "github-runner" = "true" },
-          each.value.service_account_name != null ? { "github-runner-cluster-access" = "true" } : {},
           contains(var.github_runner_stalwart_api_repositories, each.key) ? { "github-runner-stalwart-api" = "true" } : {},
         )
       }
       spec = merge(local.node_2_placement, {
-        # Only k3s-apps' runners get a ServiceAccount token: see README, "Runner design".
-        automountServiceAccountToken = each.value.service_account_name != null
-        serviceAccountName           = each.value.service_account_name
+        # No runner gets a ServiceAccount token: see README, "Runner design".
+        automountServiceAccountToken = false
 
         initContainers = [
           # dind's container: job bind mounts resolve on its side, so it needs the runner's externals at the same path.

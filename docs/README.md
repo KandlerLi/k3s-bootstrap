@@ -19,9 +19,9 @@ standalone repo (2026-09-03) to actually live alongside its real
 siblings under `bootstrap/`, not inside the repo it grants access to.
 Everything [`k3s-apps`](https://github.com/KandlerLi/k3s-apps) actually runs day to day (Blocky, ingress,
 Grafana, home-agent, deluge, open-webui, landing-page, alertmanager,
-headlamp) lives in that repo's own root instead, applied
-via CI using the `k3s-apps-ci` ServiceAccount this repo creates
-(`main.tf`).
+headlamp) lives in that repo as manifests that Argo CD syncs, with
+Secrets from ESO; Argo CD's, ESO's and Reloader's own setup and RBAC
+live here.
 
 ## Prerequisites
 
@@ -77,8 +77,9 @@ learning cluster") and `decisions.md`.
   1000m it was throttled in up to 57 % of periods (tracker #57). Further
   Pods stay `Pending` and their jobs wait in GitHub's queue rather than
   overloading the VM (tracker #12). Memory
-  requests come from the 7-day peak per Pod: 384Mi + 256Mi by default,
-  1Gi for `k3s-apps`' runner (`github_runner_memory_requests`).
+  requests come from the 7-day peak per Pod: 384Mi + 256Mi by default;
+  `github_runner_memory_requests` raises it per repository if needed
+  (none since `k3s-apps`' Terraform went).
 - **Labels.** Every scale set registers `self-hosted, home, debian`, so
   `runs-on` in every repository stays unchanged. `self-hosted` is not
   implicit on scale sets, a probe job without it never started.
@@ -123,7 +124,7 @@ learning cluster") and `decisions.md`.
 - **Image.** The community `myoung34/github-runner`, as for the slots,
   started with `run.sh` instead of its entrypoint, so ARC's JIT config
   registers it per job. Not the official `actions/actions-runner`: Jobs
-  that run directly on the runner, without `container:` (`k3s-apps`,
+  that run directly on the runner, without `container:` (e.g.
   `secrets-manager`), need its `node` (`setup-terraform`'s wrapper), AWS
   CLI and Debian `apt`. The official image's Ubuntu 24.04 has neither
   `node` on `PATH` nor an `awscli` package (2026-11-01). The runner never
@@ -133,20 +134,17 @@ learning cluster") and `decisions.md`.
   Docker images or Terraform providers. The cost, measured 2026-11-01:
   ~70 s from queued to started, plus ~76 s of `terraform init` for
   providers. A provider cache is tracked separately.
-- **Kubernetes API access.** Only `k3s-apps`' runners get a
-  ServiceAccount token (`github_runner_service_accounts`), so its
-  Terraform reaches the cluster like any in-cluster process. Every other
-  runner Pod has `automountServiceAccountToken: false`.
+- **No Kubernetes API access.** Every runner Pod has
+  `automountServiceAccountToken: false`. Until 2026-11-15 `k3s-apps`'
+  runners mounted the `k3s-apps-ci` token for its Terraform.
 - **Network policy.** Runner Pods execute whatever a workflow says, inside
   a privileged dind, on the same flat Pod network as every app. Their
   policies allow no ingress; egress only to DNS and the public internet
-  (private and link-local ranges excluded), plus, for `k3s-apps`' runners
-  only, the Kubernetes API (the server node's address after kube-proxy's
-  DNAT, and the ClusterIP), Stalwart's management API and Blocky's
-  Postgres/API and Grafana for the password rotation. Enforced by k3s's
-  embedded network-policy controller, selected by the Pod labels
-  `github-runner: "true"` and `github-runner-cluster-access: "true"`.
-  `stalwart-config`'s runners (`github-runner-stalwart-api: "true"`) reach
+  (private and link-local ranges excluded). No runner mounts a
+  ServiceAccount token or reaches the Kubernetes API (since 2026-11-15,
+  when `k3s-apps`' CI lost its Terraform). Enforced by k3s's embedded
+  network-policy controller, selected by the Pod label
+  `github-runner: "true"`. `stalwart-config`'s runners (`github-runner-stalwart-api: "true"`) reach
   only Stalwart's management API on 8080, no Kubernetes API.
 
 ## Storage
@@ -194,9 +192,10 @@ in `monitoring`; Authelia in `auth`; node-exporter in `node-exporter`;
 every other k3s-apps workload in `apps` (tracker #32). `default` holds
 no workloads. `ci` exists for two boundaries:
 
-- **RBAC:** `k3s-apps-ci` has Roles only in the app namespaces, so it
-  can't reach the runner scale sets or the GitHub App key in
-  `arc-github-app`, which registers runners for every repository.
+- **RBAC:** nothing that runs in the app namespaces (Argo CD, ESO,
+  Reloader) has a Role in `ci`, so none of it reaches the runner scale
+  sets or the GitHub App key in `arc-github-app`, which registers
+  runners for every repository.
 - **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
   since `dind` needs `privileged: true`. As the other namespaces get
   `baseline`, `ci` and `node-exporter` stay the only places a privileged
@@ -206,36 +205,27 @@ no workloads. `ci` exists for two boundaries:
   unlabelled, k3s' own components need it.
 
 `monitoring` holds Grafana, Alertmanager and kube-state-metrics:
-`enforce: restricted`. `k3s-apps-ci` gets a Role there for exactly the kinds those
-modules create. Prometheus reaches Alertmanager and kube-state-metrics
+`enforce: restricted`. Prometheus reaches Alertmanager and kube-state-metrics
 through ServiceLB on the node's address, so the namespace doesn't
 change its targets.
 
 `auth` holds Authelia, `apps` every other k3s-apps workload, Traefik
-included (both `enforce: restricted`). `k3s-apps-ci`
-has a Role in each with only the kinds its modules create. Headlamp's
+included (both `enforce: restricted`). Headlamp's
 ServiceAccount lives in `apps`, with cluster-wide read access only.
 
 `node-exporter` holds only the node-exporter DaemonSet (`node_exporter.tf`,
 imported from k3s-apps), which needs the host's network, PID namespace
 and root filesystem; it is labelled `enforce: privileged` like `ci`.
-`k3s-apps-ci`'s Role there (DaemonSets only) goes with the rest of
-k3s-apps' CI once its Terraform is gone.
 
 ## RBAC
 
-Granting RBAC is itself privilege-defining: a CI ServiceAccount that
-could create ServiceAccounts or (Cluster)RoleBindings could grant itself
-anything up to cluster-admin. So every ServiceAccount and binding lives
-here, while `k3s-apps` only references them by name in Pod specs.
+Granting RBAC is itself privilege-defining: whoever could create
+ServiceAccounts or (Cluster)RoleBindings could grant itself anything up
+to cluster-admin. So every ServiceAccount and binding lives here, applied
+locally, while `k3s-apps` only references them by name in Pod specs.
+`k3s-apps`' former CI ServiceAccount `k3s-apps-ci` and its Roles went on
+2026-11-15 with its Terraform.
 
-- **`k3s-apps-ci`** (`main.tf`) is the ServiceAccount `k3s-apps`' CI runs
-  as, for both plan and apply: plan is read-mostly, and the write gate is
-  the human PR review and merge. It lives in `ci` next to its runner
-  Pod. It has one Role per app namespace (`apps`, `auth`, `monitoring`,
-  `node-exporter`), each covering exactly the kinds that namespace's
-  modules create; for CronJobs only the CronJob objects, since their
-  Jobs and Pods belong to the CronJob controller.
 - **Headlamp** (`headlamp_rbac.tf`): read-only, never cluster-admin.
   Every visitor past Authelia acts as this ServiceAccount
   (`-unsafe-use-service-account-token`), so its scope is the UI's scope.
