@@ -151,11 +151,11 @@ learning cluster") and `decisions.md`.
 
 `storage.tf` holds the statically provisioned NFS PersistentVolumes. They
 live here because a PV is cluster-scoped: RBAC `resourceNames` only
-constrains verbs on existing objects, never `create`, so `k3s-apps`' CI
-Role could not be limited to "only these PVs". With them here, that Role
-has no `persistentvolumes` verb at all. The matching PVCs stay in
-`k3s-apps` and reference these PVs by name, since the two roots have
-separate state.
+constrains verbs on existing objects, never `create`, so whoever deploys
+`k3s-apps` (now Argo CD's controller) could not be limited to "only these
+PVs" and could mount any host or NFS path. With them here, Argo CD has no
+`persistentvolumes` verb at all. The matching PVCs stay in `k3s-apps`
+and reference these PVs by name.
 
 - `storage_class_name = "local-path"` on both sides of every pair. An
   explicit `""` is serialized like "not set" by the Kubernetes provider,
