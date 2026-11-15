@@ -6,7 +6,7 @@ locals {
   arc_controller_image = "0.15.1@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90"
   # The slots' image, not actions/actions-runner: host-run jobs need its node and AWS CLI. See README, "Runner design".
   arc_runner_image = "myoung34/github-runner:2.338.2-debian-trixie@sha256:ac2f72d1a1e20a62452a9bcb11488d880adacc2ad72786e920ebc3ba264cd0a4"
-  dind_image       = "docker:29.9.3-dind@sha256:08a98015fce594af7c382883bea080ea206de74402a95da9dc52b6428c8cd121"
+  dind_image       = "docker:29.9.3-dind@sha256:7bf70dcb85c822e3fa6f2d332143e474b99147b9d7b39102b0cfe8b04a7dd61b"
 
   arc_controller_service_account = "arc-controller"
 
