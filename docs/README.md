@@ -18,7 +18,7 @@ Originally a second Terraform root nested inside [`k3s-apps`](https://github.com
 standalone repo (2026-09-03) to actually live alongside its real
 siblings under `bootstrap/`, not inside the repo it grants access to.
 Everything [`k3s-apps`](https://github.com/KandlerLi/k3s-apps) actually runs day to day (Blocky, ingress,
-Grafana, home-agent, deluge, open-webui, landing-page, alertmanager,
+Grafana, home-agent, open-webui, landing-page, alertmanager,
 headlamp) lives in that repo as manifests that Argo CD syncs, with
 Secrets from ESO; Argo CD's, ESO's and Reloader's own setup and RBAC
 live here.
