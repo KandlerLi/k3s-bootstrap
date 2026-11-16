@@ -85,33 +85,6 @@ resource "kubernetes_persistent_volume_v1" "vaultwarden_backup" {
   }
 }
 
-resource "kubernetes_persistent_volume_v1" "open_webui_data" {
-  metadata {
-    name = "open-webui-data-pv"
-  }
-
-  spec {
-    capacity = {
-      storage = "5Gi"
-    }
-    access_modes                     = ["ReadWriteMany"]
-    persistent_volume_reclaim_policy = "Retain"
-    storage_class_name               = "local-path"
-
-    persistent_volume_source {
-      nfs {
-        server = "192.168.101.1"
-        path   = "/var/lib/open-webui"
-      }
-    }
-
-    claim_ref {
-      namespace = "apps"
-      name      = "open-webui-data"
-    }
-  }
-}
-
 # Paperless-ngx (ADR 0023): live documents on the black HDD, exports on the red HDD.
 resource "kubernetes_persistent_volume_v1" "paperless_media" {
   metadata {
