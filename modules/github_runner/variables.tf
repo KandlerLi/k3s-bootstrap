@@ -96,3 +96,9 @@ variable "github_runner_stalwart_api_repositories" {
   type        = list(string)
   default     = []
 }
+
+variable "registry_cache_ghcr_token" {
+  description = "GHCR read token the registry cache pulls with (k3s-apps/ghcr-pull-token)."
+  type        = string
+  sensitive   = true
+}

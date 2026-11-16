@@ -48,7 +48,9 @@ resource "kubernetes_config_map_v1" "github_runner_dind_daemon_config" {
 
   data = {
     "daemon.json" = jsonencode({
-      mtu = 1450
+      # The in-cluster pull-through cache speaks plain HTTP: see README, "Registry cache".
+      insecure-registries = [local.registry_cache_host]
+      mtu                 = 1450
       default-network-opts = {
         bridge = {
           "com.docker.network.driver.mtu" = "1450"
@@ -211,6 +213,8 @@ resource "helm_release" "arc_scale_set" {
           env = [
             { name = "RUNNER_ALLOW_RUNASROOT", value = "1" },
             { name = "DOCKER_HOST", value = "unix:///var/run/docker.sock" },
+            # gha-common's build-image job points later jobs' container image here.
+            { name = "GHCR_CACHE", value = local.registry_cache_host },
           ]
           resources = {
             requests = { cpu = "500m", memory = each.value.memory_request }
