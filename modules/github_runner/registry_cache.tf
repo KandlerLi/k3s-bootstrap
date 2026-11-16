@@ -89,6 +89,11 @@ resource "kubernetes_deployment_v1" "registry_cache" {
           name  = "registry"
           image = local.registry_cache_image
 
+          # The image's default is debug, with a trace span per request.
+          env {
+            name  = "REGISTRY_LOG_LEVEL"
+            value = "info"
+          }
           env {
             name  = "REGISTRY_PROXY_REMOTEURL"
             value = "https://ghcr.io"
