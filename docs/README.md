@@ -129,11 +129,24 @@ learning cluster") and `decisions.md`.
   CLI and Debian `apt`. The official image's Ubuntu 24.04 has neither
   `node` on `PATH` nor an `awscli` package (2026-11-01). The runner never
   self-updates (bump the image instead).
-- **No caches.** Every Pod starts empty (`emptyDir` only), so no job can
-  leave anything behind for the next one: no checkouts, tool caches,
-  Docker images or Terraform providers. The cost, measured 2026-11-01:
-  ~70 s from queued to started, plus ~76 s of `terraform init` for
-  providers. A provider cache is tracked separately.
+- **One cache: Terraform providers, per repository.** Everything else
+  starts empty (`emptyDir`): checkouts, tool caches, Docker images. The
+  Terraform plugin cache (`TF_PLUGIN_CACHE_DIR`, `/terraform-plugin-cache`)
+  is a hostPath on `k3s-node-2`, `/var/lib/terraform-plugin-cache/<repo>`,
+  so `terraform init` symlinks providers instead of downloading and
+  unpacking them (~70 s per job before, 2026-11-16, tracker #52).
+  - *Trust:* PR checks and the apply on `main` share their repository's
+    cache, so a job can leave a provider for a later one. Terraform uses a
+    cache entry only if it matches a hash in that job's own lock file, so
+    a planted provider fails `init` instead of running (tested
+    2026-11-16). Repositories never see each other's cache. Fork PRs
+    never run here.
+  - *Pruning:* Terraform never deletes from the cache. An init container
+    removes provider versions older than 14 days at Pod start; such a
+    version downloads once more.
+  - *Concurrency:* the cache isn't safe for concurrent writers. Two jobs
+    of one repository fetching a new version at once, or a prune under a
+    running job, can fail one `init`; a re-run fixes it.
 - **No Kubernetes API access.** Every runner Pod has
   `automountServiceAccountToken: false`. Until 2026-11-15 `k3s-apps`'
   runners mounted the `k3s-apps-ci` token for its Terraform.

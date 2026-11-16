@@ -148,6 +148,15 @@ resource "helm_release" "arc_scale_set" {
         automountServiceAccountToken = false
 
         initContainers = [
+          # Terraform never prunes its plugin cache; a version re-downloads once after 14 days. See README, "Runner design".
+          {
+            name    = "prune-terraform-plugin-cache"
+            image   = local.arc_runner_image
+            command = ["find", "/terraform-plugin-cache", "-mindepth", "4", "-maxdepth", "4", "-type", "d", "-mtime", "+14", "-exec", "rm", "-rf", "{}", "+"]
+            # Job containers write it as root (the runner's uid).
+            securityContext = { runAsUser = 0 }
+            volumeMounts    = [{ name = "terraform-plugin-cache", mountPath = "/terraform-plugin-cache" }]
+          },
           # dind's container: job bind mounts resolve on its side, so it needs the runner's externals at the same path.
           {
             name         = "init-dind-externals"
@@ -218,7 +227,8 @@ resource "helm_release" "arc_scale_set" {
           { name = "work", emptyDir = {} },
           { name = "dind-sock", emptyDir = {} },
           { name = "dind-externals", emptyDir = {} },
-          { name = "terraform-plugin-cache", emptyDir = {} },
+          # Per repository, kept across Pods; Terraform uses an entry only if it matches the job's lock file. See README, "Runner design".
+          { name = "terraform-plugin-cache", hostPath = { path = "/var/lib/terraform-plugin-cache/${each.key}", type = "DirectoryOrCreate" } },
           { name = "dind-daemon-config", configMap = { name = kubernetes_config_map_v1.github_runner_dind_daemon_config.metadata[0].name } },
         ]
       })
