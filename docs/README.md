@@ -129,8 +129,9 @@ learning cluster") and `decisions.md`.
   CLI and Debian `apt`. The official image's Ubuntu 24.04 has neither
   `node` on `PATH` nor an `awscli` package (2026-11-01). The runner never
   self-updates (bump the image instead).
-- **One cache: Terraform providers, per repository.** Everything else
-  starts empty (`emptyDir`): checkouts, tool caches, Docker images. The
+- **Two caches: Terraform providers per repository, and the registry
+  cache.** Everything else starts empty (`emptyDir`): checkouts, tool
+  caches, dind's image store. The
   Terraform plugin cache (`TF_PLUGIN_CACHE_DIR`, `/terraform-plugin-cache`)
   is a hostPath on `k3s-node-2`, `/var/lib/terraform-plugin-cache/<repo>`,
   so `terraform init` symlinks providers instead of downloading and
@@ -158,7 +159,30 @@ learning cluster") and `decisions.md`.
   when `k3s-apps`' CI lost its Terraform). Enforced by k3s's embedded
   network-policy controller, selected by the Pod label
   `github-runner: "true"`. `stalwart-config`'s runners (`github-runner-stalwart-api: "true"`) reach
-  only Stalwart's management API on 8080, no Kubernetes API.
+  only Stalwart's management API on 8080, no Kubernetes API. Every runner
+  reaches the registry cache on 5000 (below).
+- **Registry cache.** `registry-cache` (`registry_cache.tf`, CNCF
+  Distribution in proxy mode) is a read-only pull-through cache for
+  `ghcr.io` on `k3s-node-2`, blobs on the hostPath `/var/lib/registry-cache`,
+  dropped 7 days after their last pull. Pulling a CI image from GHCR into
+  a fresh dind took ~30 s of a job's ~45 s "Initialize containers"
+  (2026-11-16, tracker #52); unpacking (~12 s) stays.
+  - *Addressing:* dockerd's `registry-mirrors` only covers Docker Hub, so
+    the runner exports `GHCR_CACHE` and `gha-common`'s build-image job
+    hands later jobs `<GHCR_CACHE>/kandlerli/<repo>-ci:<tag>` instead of
+    `ghcr.io/…`. dind lists the cache in `insecure-registries`: plain HTTP
+    inside the cluster, like every other in-cluster hop.
+  - *Credential:* it pulls with `k3s-apps/ghcr-pull-token`, read into a
+    Secret at apply time. That token is account-wide, so any runner can
+    pull any private KandlerLi package through the cache, not just its own
+    repository's (accepted 2026-11-16: the packages are CI images and
+    `sankey-export`, holding no secrets). Rotating the token needs a
+    re-apply here.
+  - *Trust:* nobody can push to a proxy-mode registry. It resolves tags
+    against GHCR on each pull and serves blobs by digest, which dockerd
+    verifies.
+  - *Network:* ingress only from runner Pods on 5000; egress only to DNS
+    and the public internet on 443.
 
 ## Storage
 
