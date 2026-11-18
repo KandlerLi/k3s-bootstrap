@@ -20,7 +20,7 @@ resource "kubernetes_namespace_v1" "node_exporter" {
   }
 }
 
-# Grafana, Alertmanager and kube-state-metrics: see README, "Namespaces".
+# Grafana, Alertmanager, kube-state-metrics and Alloy: see README, "Namespaces".
 resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
     name = "monitoring"

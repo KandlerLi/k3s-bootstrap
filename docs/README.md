@@ -224,8 +224,8 @@ and reference these PVs by name.
 ## Namespaces
 
 The runners live in `ci`, the ARC controller and its listeners in
-`arc-system` (`enforce: restricted`); Grafana, Alertmanager and kube-state-metrics
-in `monitoring`; Authelia in `auth`; node-exporter in `node-exporter`;
+`arc-system` (`enforce: restricted`); Grafana, Alertmanager, kube-state-metrics
+and Alloy in `monitoring`; Authelia in `auth`; node-exporter in `node-exporter`;
 every other k3s-apps workload in `apps` (tracker #32). `default` holds
 no workloads. `ci` exists for two boundaries:
 
@@ -241,7 +241,7 @@ no workloads. `ci` exists for two boundaries:
   `default` enforces `baseline` (`psa.tf`); `kube-system` stays
   unlabelled, k3s' own components need it.
 
-`monitoring` holds Grafana, Alertmanager and kube-state-metrics:
+`monitoring` holds Grafana, Alertmanager, kube-state-metrics and Alloy:
 `enforce: restricted`. Prometheus reaches Alertmanager and kube-state-metrics
 through ServiceLB on the node's address, so the namespace doesn't
 change its targets.
@@ -285,6 +285,12 @@ locally, while `k3s-apps` only references them by name in Pod specs.
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
   `--resources` list includes; Secrets excluded.
+- **Alloy** (`alloy_rbac.tf`): `get`/`list`/`watch` on Pods and `get`
+  on `pods/log`, cluster-wide, so k3s-apps' Alloy can tail every Pod's
+  logs through the API and push them to the homeserver's Loki
+  (home-infra's `monitoring` role). No hostPath, no Secrets, no `exec`.
+  Pod logs can contain whatever an app prints; they end up only in
+  Loki, readable through Grafana.
 - **`prometheus-kubelet`** (`kubelet_metrics_rbac.tf`): `get` on
   `nodes/metrics` only, for the homeserver's Prometheus scraping each
   kubelet's `/metrics/cadvisor`. Never `nodes/proxy`, which also allows
