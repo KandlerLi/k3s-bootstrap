@@ -27,7 +27,7 @@ jobs:
         # Keep in sync with modules/github_runner/arc.tf and eso.tf.
         include:
           - name: dind
-            ref: docker:29.9.3-dind@sha256:7bf70dcb85c822e3fa6f2d332143e474b99147b9d7b39102b0cfe8b04a7dd61b
+            ref: docker:29.10.0-dind@sha256:4bbc7223f81db790097c6dea42fb93e05b8fead4f0431fbe6ccaba6e8473201c
           - name: github-runner
             ref: myoung34/github-runner:2.338.2-debian-trixie@sha256:ac2f72d1a1e20a62452a9bcb11488d880adacc2ad72786e920ebc3ba264cd0a4
           - name: arc-controller
@@ -35,7 +35,7 @@ jobs:
           - name: external-secrets
             ref: ghcr.io/external-secrets/external-secrets:v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31
           - name: reloader
-            ref: ghcr.io/stakater/reloader:v1.4.24@sha256:3ab43d3eb96c59798644bf826b0444a846c0197d22ab4b6c101c4da3e1d6ef23
+            ref: ghcr.io/stakater/reloader:v1.4.25@sha256:db8b1818f5da373ab85c05b30220fcae80a9ac0532052e6d68a6a5999111f18f
     uses: KandlerLi/gha-common/.github/workflows/trivy-image.yml@v0.0.17
     with:
       image_name: ${{ matrix.name }}
