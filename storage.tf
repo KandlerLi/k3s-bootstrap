@@ -168,6 +168,34 @@ resource "kubernetes_persistent_volume_v1" "nextcloud_data" {
   }
 }
 
+# Target of k3s-apps' Nextcloud backup CronJob (pg_dump + config.php), on the red HDD (ADR 0033).
+resource "kubernetes_persistent_volume_v1" "nextcloud_backup" {
+  metadata {
+    name = "nextcloud-backup-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "20Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/nextcloud-backup"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "nextcloud-backup"
+    }
+  }
+}
+
 # sankey-export's state on k3s-node-1's disk. A PV, so the Pod itself has no hostPath volume (PSA baseline).
 resource "kubernetes_persistent_volume_v1" "sankey_export_state" {
   metadata {
