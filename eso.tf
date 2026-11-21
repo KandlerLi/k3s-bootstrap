@@ -6,7 +6,7 @@ locals {
   eso_chart_version      = "2.15.0"
   eso_image              = "ghcr.io/external-secrets/external-secrets:v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31"
   reloader_chart_version = "2.2.20"
-  reloader_image         = "ghcr.io/stakater/reloader:v1.4.24@sha256:3ab43d3eb96c59798644bf826b0444a846c0197d22ab4b6c101c4da3e1d6ef23"
+  reloader_image         = "ghcr.io/stakater/reloader:v1.4.25@sha256:db8b1818f5da373ab85c05b30220fcae80a9ac0532052e6d68a6a5999111f18f"
 
   # Same namespaces as Argo CD's; terraform-state's k3s-eso-<namespace> roles trust their external-secrets ServiceAccount.
   eso_namespaces = local.argocd_namespaces
