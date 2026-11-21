@@ -18,6 +18,7 @@ locals {
     sankey-export      = "apps"
     vaultwarden        = "apps"
     paperless          = "apps"
+    nextcloud          = "apps"
     stalwart           = "apps"
     ingress            = "apps"
     blocky             = "apps"
@@ -37,13 +38,13 @@ locals {
   # Everything Argo CD may write, per namespace and by name; PVCs hold data, so Argo CD never deletes one.
   argocd_objects = {
     apps = {
-      configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "ingress-static-config", "ingress-dynamic-config"] }
-      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "bulwark-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc"] }
-      deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "bulwark", "vaultwarden", "paperless", "stalwart", "ingress", "blocky"] }
+      configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "ingress-static-config", "ingress-dynamic-config", "nextcloud-hooks"] }
+      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "bulwark-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc", "nextcloud-svc"] }
+      deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "bulwark", "vaultwarden", "paperless", "stalwart", "ingress", "blocky", "nextcloud"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup"] }
       networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create = true, delete = true, names = ["vaultwarden"] }
-      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["bulwark-session", "bulwark-oidc", "sankey-export-app-password", "sankey-export-ghcr-pull-secret", "vaultwarden-sso", "paperless-postgres", "paperless-env", "ingress-acme-dns01-credentials", "stalwart-ses-smtp", "blocky-config", "blocky-postgres-credentials", "blocky-postgres-exporter-dsn"] }
-      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["blocky-postgres", "bulwark", "ingress-acme", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup"] }
+      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["bulwark-session", "bulwark-oidc", "sankey-export-app-password", "sankey-export-ghcr-pull-secret", "vaultwarden-sso", "paperless-postgres", "paperless-env", "ingress-acme-dns01-credentials", "stalwart-ses-smtp", "blocky-config", "blocky-postgres-credentials", "blocky-postgres-exporter-dsn", "nextcloud-env", "nextcloud-postgres"] }
+      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["blocky-postgres", "bulwark", "ingress-acme", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup", "nextcloud-data", "nextcloud-html", "nextcloud-postgres"] }
     }
     auth = {
       services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["authelia-svc"] }
