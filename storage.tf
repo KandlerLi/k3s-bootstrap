@@ -168,6 +168,34 @@ resource "kubernetes_persistent_volume_v1" "nextcloud_data" {
   }
 }
 
+# Nextcloud's live data directory (ADR 0033), mounted from the cutover on; AIO's until then.
+resource "kubernetes_persistent_volume_v1" "nextcloud_files" {
+  metadata {
+    name = "nextcloud-files-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "1Ti"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/black-hdd/nextcloud"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "nextcloud-files"
+    }
+  }
+}
+
 # Target of k3s-apps' Nextcloud backup CronJob (pg_dump + config.php), on the red HDD (ADR 0033).
 resource "kubernetes_persistent_volume_v1" "nextcloud_backup" {
   metadata {
