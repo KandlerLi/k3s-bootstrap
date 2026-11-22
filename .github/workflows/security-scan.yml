@@ -13,7 +13,7 @@ on:
 
 jobs:
   trivy-config:
-    uses: KandlerLi/gha-common/.github/workflows/trivy-config.yml@v0.0.17
+    uses: KandlerLi/gha-common/.github/workflows/trivy-config.yml@v1.2.0
     with:
       runs_on: '["ubuntu-latest"]'
     permissions:
@@ -36,7 +36,7 @@ jobs:
             ref: ghcr.io/external-secrets/external-secrets:v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31
           - name: reloader
             ref: ghcr.io/stakater/reloader:v1.4.24@sha256:3ab43d3eb96c59798644bf826b0444a846c0197d22ab4b6c101c4da3e1d6ef23
-    uses: KandlerLi/gha-common/.github/workflows/trivy-image.yml@v0.0.17
+    uses: KandlerLi/gha-common/.github/workflows/trivy-image.yml@v1.2.0
     with:
       image_name: ${{ matrix.name }}
       image_ref: ${{ matrix.ref }}
@@ -47,6 +47,6 @@ jobs:
       packages: read
 
   gitleaks:
-    uses: KandlerLi/gha-common/.github/workflows/gitleaks.yml@v0.0.17
+    uses: KandlerLi/gha-common/.github/workflows/gitleaks.yml@v1.2.0
     permissions:
       contents: read
