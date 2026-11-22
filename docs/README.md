@@ -206,11 +206,12 @@ and reference these PVs by name.
   directory on `k3s-node-1`, pinned there by node affinity. Through a
   PV the Pod mounts a PVC, which PSA `baseline` allows, and the
   directory stays where it was.
-- `apps_host_path` are the six volumes that were dynamic local-path
-  claims (`reclaimPolicy: Delete`) until the move to `apps`: Blocky's
-  and Paperless' Postgres, Paperless' data, Bulwark, Traefik's ACME
-  store and Stalwart's mail. Host paths under `/var/lib/k3s-apps-data`
-  on `k3s-node-1`, `Retain`, so deleting a claim never deletes data.
+- `apps_host_path` are node-local volumes under `/var/lib/k3s-apps-data`
+  on `k3s-node-1`, `Retain`, so deleting a claim never deletes data. Six
+  were dynamic local-path claims (`reclaimPolicy: Delete`) until the move
+  to `apps`: Blocky's and Paperless' Postgres, Paperless' data, Bulwark,
+  Traefik's ACME store and Stalwart's mail. Nextcloud's code/config
+  (`nextcloud-html`) and Postgres came later (ADR 0033).
 - Every PV here carries a `claim_ref` naming its claim's namespace: a
   `Retain` PV released by a deleted claim only binds again to the claim
   its `claimRef` names.
@@ -219,7 +220,9 @@ and reference these PVs by name.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
-  the red HDD. The directories are owned by `home-infra` roles.
+  the red HDD. `nextcloud_data` (ADR 0033) points at the test
+  instance's empty data directory; `nextcloud_files` at the live one,
+  which the Pod mounts from the cutover on (`nextcloud_data` goes then). The directories are owned by `home-infra` roles.
 
 ## Namespaces
 

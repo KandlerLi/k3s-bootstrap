@@ -140,6 +140,90 @@ resource "kubernetes_persistent_volume_v1" "paperless_export" {
   }
 }
 
+# Nextcloud on k3s (ADR 0033): for now the test instance's empty data directory (home-infra's nextcloud_storage role).
+resource "kubernetes_persistent_volume_v1" "nextcloud_data" {
+  metadata {
+    name = "nextcloud-data-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "1Ti"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/black-hdd/nextcloud-k3s-test"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "nextcloud-data"
+    }
+  }
+}
+
+# Nextcloud's live data directory (ADR 0033), mounted from the cutover on; AIO's until then.
+resource "kubernetes_persistent_volume_v1" "nextcloud_files" {
+  metadata {
+    name = "nextcloud-files-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "1Ti"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/black-hdd/nextcloud"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "nextcloud-files"
+    }
+  }
+}
+
+# Target of k3s-apps' Nextcloud backup CronJob (pg_dump + config.php), on the red HDD (ADR 0033).
+resource "kubernetes_persistent_volume_v1" "nextcloud_backup" {
+  metadata {
+    name = "nextcloud-backup-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "20Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/nextcloud-backup"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "nextcloud-backup"
+    }
+  }
+}
+
 # sankey-export's state on k3s-node-1's disk. A PV, so the Pod itself has no hostPath volume (PSA baseline).
 resource "kubernetes_persistent_volume_v1" "sankey_export_state" {
   metadata {
@@ -187,6 +271,8 @@ locals {
     blocky-postgres    = "256Mi"
     bulwark            = "1Gi"
     ingress-acme       = "128Mi"
+    nextcloud-html     = "10Gi"
+    nextcloud-postgres = "5Gi"
     paperless-data     = "5Gi"
     paperless-postgres = "2Gi"
     stalwart           = "5Gi"
