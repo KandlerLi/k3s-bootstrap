@@ -140,35 +140,7 @@ resource "kubernetes_persistent_volume_v1" "paperless_export" {
   }
 }
 
-# Nextcloud on k3s (ADR 0033): for now the test instance's empty data directory (home-infra's nextcloud_storage role).
-resource "kubernetes_persistent_volume_v1" "nextcloud_data" {
-  metadata {
-    name = "nextcloud-data-pv"
-  }
-
-  spec {
-    capacity = {
-      storage = "1Ti"
-    }
-    access_modes                     = ["ReadWriteMany"]
-    persistent_volume_reclaim_policy = "Retain"
-    storage_class_name               = "local-path"
-
-    persistent_volume_source {
-      nfs {
-        server = "192.168.101.1"
-        path   = "/mnt/black-hdd/nextcloud-k3s-test"
-      }
-    }
-
-    claim_ref {
-      namespace = "apps"
-      name      = "nextcloud-data"
-    }
-  }
-}
-
-# Nextcloud's live data directory (ADR 0033), mounted from the cutover on; AIO's until then.
+# Nextcloud's live data directory (ADR 0033).
 resource "kubernetes_persistent_volume_v1" "nextcloud_files" {
   metadata {
     name = "nextcloud-files-pv"

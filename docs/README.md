@@ -220,9 +220,8 @@ and reference these PVs by name.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
-  the red HDD. `nextcloud_data` (ADR 0033) points at the test
-  instance's empty data directory; `nextcloud_files` at the live one,
-  which the Pod mounts from the cutover on (`nextcloud_data` goes then). The directories are owned by `home-infra` roles.
+  the red HDD. `nextcloud_files` (ADR 0033) holds Nextcloud's live
+  data directory. The directories are owned by `home-infra` roles.
 
 ## Namespaces
 
