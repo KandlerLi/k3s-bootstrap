@@ -40,7 +40,7 @@ locals {
   # Everything Argo CD may write, per namespace and by name; PVCs hold data, so Argo CD never deletes one.
   argocd_objects = {
     apps = {
-      configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "ingress-static-config", "ingress-dynamic-config", "nextcloud-hooks"] }
+      configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "ingress-static-config", "ingress-dynamic-config", "nextcloud-hooks", "minecraft-geyser-patches"] }
       services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "bulwark-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc", "nextcloud-svc", "eurooffice-svc", "minecraft-svc"] }
       deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "bulwark", "vaultwarden", "paperless", "stalwart", "ingress", "blocky", "nextcloud", "eurooffice", "minecraft"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup", "nextcloud-backup"] }
