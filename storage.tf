@@ -57,6 +57,34 @@ resource "kubernetes_persistent_volume_v1" "stalwart_backup" {
   }
 }
 
+# Target of k3s-apps' Minecraft backup sidecar, on the homeserver's red HDD.
+resource "kubernetes_persistent_volume_v1" "minecraft_backup" {
+  metadata {
+    name = "minecraft-backup-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "50Gi"
+    }
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      nfs {
+        server = "192.168.101.1"
+        path   = "/mnt/red-hdd/minecraft-backup"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "minecraft-backup"
+    }
+  }
+}
+
 # Target of k3s-apps' Vaultwarden backup CronJob, on the homeserver's red HDD.
 resource "kubernetes_persistent_volume_v1" "vaultwarden_backup" {
   metadata {
@@ -248,6 +276,7 @@ locals {
     paperless-data     = "5Gi"
     paperless-postgres = "2Gi"
     stalwart           = "5Gi"
+    minecraft          = "10Gi"
   }
 }
 
