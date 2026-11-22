@@ -21,6 +21,7 @@ locals {
     nextcloud          = "apps"
     eurooffice         = "apps"
     stalwart           = "apps"
+    minecraft          = "apps"
     ingress            = "apps"
     blocky             = "apps"
     authelia           = "auth"
@@ -40,12 +41,12 @@ locals {
   argocd_objects = {
     apps = {
       configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "ingress-static-config", "ingress-dynamic-config", "nextcloud-hooks"] }
-      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "bulwark-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc", "nextcloud-svc", "eurooffice-svc"] }
-      deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "bulwark", "vaultwarden", "paperless", "stalwart", "ingress", "blocky", "nextcloud", "eurooffice"] }
+      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "bulwark-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc", "nextcloud-svc", "eurooffice-svc", "minecraft-svc"] }
+      deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "bulwark", "vaultwarden", "paperless", "stalwart", "ingress", "blocky", "nextcloud", "eurooffice", "minecraft"] }
       cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup", "nextcloud-backup"] }
-      networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create = true, delete = true, names = ["vaultwarden", "nextcloud", "eurooffice"] }
+      networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create = true, delete = true, names = ["vaultwarden", "nextcloud", "eurooffice", "minecraft"] }
       externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["bulwark-session", "bulwark-oidc", "sankey-export-app-password", "sankey-export-ghcr-pull-secret", "vaultwarden-sso", "paperless-postgres", "paperless-env", "ingress-acme-dns01-credentials", "stalwart-ses-smtp", "blocky-config", "blocky-postgres-credentials", "blocky-postgres-exporter-dsn", "nextcloud-env", "nextcloud-postgres", "eurooffice-env"] }
-      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["blocky-postgres", "bulwark", "ingress-acme", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup", "nextcloud-html", "nextcloud-postgres", "nextcloud-backup", "nextcloud-files"] }
+      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["blocky-postgres", "bulwark", "ingress-acme", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup", "nextcloud-html", "nextcloud-postgres", "nextcloud-backup", "nextcloud-files", "minecraft", "minecraft-backup"] }
     }
     auth = {
       services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["authelia-svc"] }

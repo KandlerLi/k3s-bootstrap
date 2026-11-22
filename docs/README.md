@@ -216,7 +216,9 @@ and reference these PVs by name.
   `Retain` PV released by a deleted claim only binds again to the claim
   its `claimRef` names.
 - `stalwart_backup` is the write target of `k3s-apps`' Stalwart backup
-  CronJob on the red HDD.
+  CronJob on the red HDD; `minecraft_backup` the same for the Minecraft
+  Pod's backup sidecar (ADR 0036), whose world is the `minecraft`
+  host-path volume.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
