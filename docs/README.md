@@ -217,8 +217,10 @@ and reference these PVs by name.
   its `claimRef` names.
 - `stalwart_backup` is the write target of `k3s-apps`' Stalwart backup
   CronJob on the red HDD; `minecraft_backup` the same for the Minecraft
-  Pod's backup sidecar (ADR 0036), whose world is the `minecraft`
-  host-path volume.
+  Pod's backup sidecar (ADR 0036). Its world is `minecraft_world`, a
+  host-path volume on `k3s-node-3`, the tainted node only Minecraft runs
+  on; the old `minecraft` volume on `k3s-node-1` stays until the move is
+  verified.
 - `authelia_backup` is the write target of `k3s-apps`' Authelia backup
   CronJob, so snapshots leave the node's disk; the Paperless-ngx PVs
   (ADR 0023) hold live documents on the black HDD and nightly exports on
