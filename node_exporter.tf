@@ -36,6 +36,13 @@ resource "kubernetes_daemon_set_v1" "node_exporter" {
           effect   = "NoSchedule"
         }
 
+        toleration {
+          key      = "workload"
+          operator = "Equal"
+          value    = "minecraft"
+          effect   = "NoSchedule"
+        }
+
         # host_network: it reports the node's real stats, and Prometheus outside the cluster reaches it directly.
         host_network = true
         host_pid     = true

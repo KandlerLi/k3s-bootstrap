@@ -320,3 +320,43 @@ resource "kubernetes_persistent_volume_v1" "apps_host_path" {
     }
   }
 }
+
+# The Minecraft world on k3s-node-3, its own tainted node (ADR 0036); replaces the node-1 "minecraft" volume.
+resource "kubernetes_persistent_volume_v1" "minecraft_world" {
+  metadata {
+    name = "minecraft-world-pv"
+  }
+
+  spec {
+    capacity = {
+      storage = "10Gi"
+    }
+    access_modes                     = ["ReadWriteOnce"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "local-path"
+
+    persistent_volume_source {
+      host_path {
+        path = "/var/lib/k3s-apps-data/minecraft"
+        type = "DirectoryOrCreate"
+      }
+    }
+
+    claim_ref {
+      namespace = "apps"
+      name      = "minecraft-world"
+    }
+
+    node_affinity {
+      required {
+        node_selector_term {
+          match_expressions {
+            key      = "kubernetes.io/hostname"
+            operator = "In"
+            values   = ["k3s-node-3"]
+          }
+        }
+      }
+    }
+  }
+}
