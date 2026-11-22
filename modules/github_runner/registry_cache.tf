@@ -1,7 +1,7 @@
 # Pull-through cache for ghcr.io, so runner Pods pull CI images over the cluster network: see README, "Registry cache".
 
 locals {
-  registry_cache_image = "registry:3.1.1@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0"
+  registry_cache_image = "registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c"
   registry_cache_port  = 5000
   registry_cache_uid   = 65534
   # What runner Pods and dind address it as; gha-common reads it from the runner's GHCR_CACHE.
