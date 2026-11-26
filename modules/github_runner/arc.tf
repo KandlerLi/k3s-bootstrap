@@ -4,9 +4,9 @@ locals {
   arc_chart_repository = "oci://ghcr.io/actions/actions-runner-controller-charts"
   arc_chart_version    = "0.15.1"
   arc_controller_image = "0.15.1@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90"
-  # The slots' image, not actions/actions-runner: host-run jobs need its node and AWS CLI. See README, "Runner design".
-  arc_runner_image = "myoung34/github-runner:2.338.2-debian-trixie@sha256:ac2f72d1a1e20a62452a9bcb11488d880adacc2ad72786e920ebc3ba264cd0a4"
-  dind_image       = "docker:29.10.0-dind@sha256:4bbc7223f81db790097c6dea42fb93e05b8fead4f0431fbe6ccaba6e8473201c"
+  # Runs as uid 1001 without root, Docker or node: see README, "Runner design".
+  arc_runner_image = "ghcr.io/actions/actions-runner:2.338.2@sha256:6d0b2d80d80f143f77dcb676e50920100bbb547e39e883454d57f45ab8c31300"
+  arc_runner_uid   = 1001
 
   arc_controller_service_account = "arc-controller"
 
@@ -36,27 +36,6 @@ locals {
     allowPrivilegeEscalation = false
     readOnlyRootFilesystem   = true
     capabilities             = { drop = ["ALL"] }
-  }
-}
-
-# default-network-opts sets the MTU for every bridge network, custom ones included: see README, "Runner design".
-resource "kubernetes_config_map_v1" "github_runner_dind_daemon_config" {
-  metadata {
-    name      = "github-runner-dind-daemon-config"
-    namespace = var.namespace
-  }
-
-  data = {
-    "daemon.json" = jsonencode({
-      # The in-cluster pull-through cache speaks plain HTTP: see README, "Registry cache".
-      insecure-registries = [local.registry_cache_host]
-      mtu                 = 1450
-      default-network-opts = {
-        bridge = {
-          "com.docker.network.driver.mtu" = "1450"
-        }
-      }
-    })
   }
 }
 
@@ -149,92 +128,26 @@ resource "helm_release" "arc_scale_set" {
         # No runner gets a ServiceAccount token: see README, "Runner design".
         automountServiceAccountToken = false
 
-        initContainers = [
-          # Terraform never prunes its plugin cache; a version re-downloads once after 14 days. See README, "Runner design".
-          {
-            name    = "prune-terraform-plugin-cache"
-            image   = local.arc_runner_image
-            command = ["find", "/terraform-plugin-cache", "-mindepth", "4", "-maxdepth", "4", "-type", "d", "-mtime", "+14", "-exec", "rm", "-rf", "{}", "+"]
-            # Job containers write it as root (the runner's uid).
-            securityContext = { runAsUser = 0 }
-            volumeMounts    = [{ name = "terraform-plugin-cache", mountPath = "/terraform-plugin-cache" }]
-          },
-          # dind's container: job bind mounts resolve on its side, so it needs the runner's externals at the same path.
-          {
-            name         = "init-dind-externals"
-            image        = local.arc_runner_image
-            command      = ["cp", "-r", "/actions-runner/externals/.", "/actions-runner/tmpDir/"]
-            volumeMounts = [{ name = "dind-externals", mountPath = "/actions-runner/tmpDir" }]
-          },
-          # A native sidecar: the runner starts only once the startupProbe sees dockerd.
-          {
-            name          = "dind"
-            image         = local.dind_image
-            restartPolicy = "Always"
-            # Unix socket only, and dockerd retried in place instead of via CrashLoopBackOff: see README, "Runner design".
-            command = ["sh", "-c", <<-EOT
-              trap 'kill -TERM "$child" 2>/dev/null; wait "$child"; exit 0' TERM INT
-              while true; do
-                dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock &
-                child=$!
-                wait "$child"
-                echo "dockerd exited with $?, retrying in 5s" >&2
-                sleep 5
-              done
-            EOT
-            ]
-            env             = [{ name = "DOCKER_TLS_CERTDIR", value = "" }]
-            securityContext = { privileged = true }
-            startupProbe = {
-              exec             = { command = ["docker", "info"] }
-              periodSeconds    = 5
-              failureThreshold = 120
-            }
-            resources = {
-              requests = { cpu = "400m", memory = "256Mi" }
-              limits   = { cpu = "1500m", memory = "768Mi" }
-            }
-            volumeMounts = [
-              { name = "work", mountPath = "/actions-runner/_work" },
-              { name = "dind-sock", mountPath = "/var/run" },
-              { name = "dind-externals", mountPath = "/actions-runner/externals" },
-              { name = "terraform-plugin-cache", mountPath = "/terraform-plugin-cache" },
-              { name = "dind-daemon-config", mountPath = "/etc/docker/daemon.json", subPath = "daemon.json", readOnly = true },
-            ]
-          },
-        ]
+        securityContext = local.restricted_pod_security_context
 
         containers = [{
-          name  = "runner"
-          image = local.arc_runner_image
-          # Root and umask 000 as before, against the uid mismatch with container: jobs: see README, "Runner design".
-          command         = ["sh", "-c", "umask 000; exec /actions-runner/run.sh"]
-          securityContext = { runAsUser = 0 }
-          env = [
-            { name = "RUNNER_ALLOW_RUNASROOT", value = "1" },
-            { name = "DOCKER_HOST", value = "unix:///var/run/docker.sock" },
-            # gha-common's build-image job points later jobs' container image here.
-            { name = "GHCR_CACHE", value = local.registry_cache_host },
-          ]
+          name    = "runner"
+          image   = local.arc_runner_image
+          command = ["/home/runner/run.sh"]
+          # The image's USER is a name, so runAsNonRoot needs the uid spelled out.
+          securityContext = merge(local.restricted_container_security_context, {
+            runAsUser = local.arc_runner_uid
+            # The runner writes its config, logs and tool cache under /home/runner.
+            readOnlyRootFilesystem = false
+          })
           resources = {
             requests = { cpu = "500m", memory = each.value.memory_request }
             limits   = { cpu = "2000m", memory = "1Gi" }
           }
-          volumeMounts = [
-            { name = "work", mountPath = "/actions-runner/_work" },
-            { name = "dind-sock", mountPath = "/var/run" },
-            { name = "terraform-plugin-cache", mountPath = "/terraform-plugin-cache" },
-          ]
+          volumeMounts = [{ name = "work", mountPath = "/home/runner/_work" }]
         }]
 
-        volumes = [
-          { name = "work", emptyDir = {} },
-          { name = "dind-sock", emptyDir = {} },
-          { name = "dind-externals", emptyDir = {} },
-          # Per repository, kept across Pods; Terraform uses an entry only if it matches the job's lock file. See README, "Runner design".
-          { name = "terraform-plugin-cache", hostPath = { path = "/var/lib/terraform-plugin-cache/${each.key}", type = "DirectoryOrCreate" } },
-          { name = "dind-daemon-config", configMap = { name = kubernetes_config_map_v1.github_runner_dind_daemon_config.metadata[0].name } },
-        ]
+        volumes = [{ name = "work", emptyDir = {} }]
       })
     }
   })]

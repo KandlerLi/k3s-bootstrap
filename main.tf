@@ -5,7 +5,7 @@ resource "kubernetes_namespace_v1" "ci" {
   metadata {
     name = "ci"
     labels = {
-      "pod-security.kubernetes.io/enforce" = "privileged"
+      "pod-security.kubernetes.io/enforce" = "restricted"
     }
   }
 }
@@ -72,6 +72,4 @@ module "github_runner" {
   github_runner_repositories        = var.github_runner_repositories
 
   github_runner_stalwart_api_repositories = ["stalwart-config"]
-
-  registry_cache_ghcr_token = local.k3s_apps_ghcr_pull_token["token"]
 }

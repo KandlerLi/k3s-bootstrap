@@ -63,26 +63,33 @@ with one runner scale set per repository in
 `repositories.auto.tfvars.json` (tracker #39). There are no idle runner
 Pods: each scale set has one small listener Pod, and ARC creates a fresh
 runner Pod for each job and deletes it afterwards (`minRunners: 0`).
-Until 2026-11 it ran two permanent Deployments ("slots") per
-repository, 16 Pods that were idle most of the time. That design and
-every bug found building it: `home-infra-docs`' `history.md` ("k3s
-learning cluster") and `decisions.md`.
+The slots before that, and every bug found building both: `home-infra-docs`'
+`history.md` ("k3s learning cluster") and `decisions.md`.
 
+- **Who gets a runner.** Only repositories whose CI needs the home
+  network: today `stalwart-config` (Stalwart's in-cluster API). Everything
+  else runs on GitHub-hosted runners since `gha-common` v2.0.0
+  (2026-11-26), including every Docker build and `container:` job.
+- **No Docker, no root.** The runner Pod is one container,
+  `ghcr.io/actions/actions-runner` as uid 1001, and passes PSA
+  `restricted`: no privileged `dind`, no hostPath, all capabilities
+  dropped. Until 2026-11-26 every runner Pod had a privileged `dind`
+  sidecar, a hostPath Terraform plugin cache and a GHCR pull-through
+  cache (`registry-cache`); all three went with the Docker jobs.
+- **Image.** The official image has no `node` on `PATH` and no AWS CLI,
+  so jobs here use `setup-terraform` with `terraform_wrapper: false` and
+  `aws-actions/configure-aws-credentials` (which brings its own node).
+  `jq`, `git`, `curl` and `unzip` are in the image. ARC starts
+  `/home/runner/run.sh` with its JIT config; the runner never
+  self-updates (bump the image instead).
 - **Concurrency.** `maxRunners` (`github_runner_max_runners_per_repository`)
-  is only an upper bound. The real limit is node-2. Every runner Pod
-  requests 900m CPU (runner 500m + dind 400m), so four jobs fit on its
-  four vCPUs (3600m plus ~60m for the controller, listeners and
-  node-exporter). The requests follow the measured p95 per container
-  (runner 0.82, dind 0.64 cores); dind's limit is 1500m because at
-  1000m it was throttled in up to 57 % of periods (tracker #57). Further
-  Pods stay `Pending` and their jobs wait in GitHub's queue rather than
-  overloading the VM (tracker #12). Memory
-  requests come from the 7-day peak per Pod: 384Mi + 256Mi by default;
-  `github_runner_memory_requests` raises it per repository if needed
-  (none since `k3s-apps`' Terraform went).
-- **Labels.** Every scale set registers `self-hosted, home, debian`, so
-  `runs-on` in every repository stays unchanged. `self-hosted` is not
-  implicit on scale sets, a probe job without it never started.
+  is only an upper bound. Every runner Pod requests 500m CPU and 384Mi
+  (`github_runner_memory_requests` raises the memory per repository);
+  further Pods stay `Pending` and their jobs wait in GitHub's queue
+  rather than overloading the VM (tracker #12).
+- **Labels.** Every scale set registers `self-hosted, home, debian`.
+  `self-hosted` is not implicit on scale sets, a probe job without it
+  never started.
 - **Controller.** In `arc-system` (`enforce: restricted`), with its
   listeners. `watchSingleNamespace: ci` gives it Roles in `ci` only, no
   ClusterRole. It authenticates as the `kandlerli-home-infra-runner`
@@ -92,97 +99,16 @@ learning cluster") and `decisions.md`.
   public charts.
 - **Placement.** Controller, listeners and runners are pinned to
   `k3s-node-2` and tolerate its `ci=github-runner:NoSchedule` taint, so
-  CI never competes with or endangers anything on `k3s-node-1`.
-- **Docker.** A privileged `docker:dind` per Pod, not kaniko/rootless, so
-  every repository's `docker build`/`docker run` steps work unmodified.
-  A privileged container can escape to its node. That is accepted
-  because `k3s-node-2` runs nothing but CI. dind is a native sidecar
-  (`restartPolicy: Always` init container), and its `startupProbe` on
-  `docker info` keeps the runner from starting until dockerd answers. A
-  runner that came up first failed its first job with `Cannot connect to
-  the Docker daemon` (2026-10-24).
-- **dockerd on the Unix socket only.** dind runs `dockerd
-  --host=unix:///var/run/docker.sock` on a socket volume shared with the
-  runner. Without arguments, as before 2026-10-25, the image's
-  entrypoint adds an unauthenticated `--host=tcp://0.0.0.0:2375` whenever
-  `DOCKER_TLS_CERTDIR=""`.
-- **dind retries in place.** Under heavy IO, dockerd gives up on its
-  managed containerd after 15 s. Left to Kubernetes, every such exit
-  meant growing CrashLoopBackOff delays, so dockerd runs in a shell loop
-  that retries after 5 s and forwards SIGTERM for a clean shutdown.
-- **MTU.** The Pod network's MTU is 1450. dockerd's bridge networks
-  default to 1500, which silently black-holed response bodies of
-  `container:` job steps. `daemon.json` sets `"mtu": 1450` and, via
-  `default-network-opts`, the same for every bridge network dockerd
-  creates, including the per-job network GitHub's runner makes.
-- **Shared paths.** A `container:` job's bind-mount sources resolve on
-  dockerd's filesystem, not the runner's. So `/actions-runner/_work`, the
-  runner's externals (copied by an init container) and
-  `/terraform-plugin-cache` are mounted at the same paths in both
-  containers. The runner runs as root with `umask 000`, so files it
-  writes stay usable by job containers running under another uid.
-- **Image.** The community `myoung34/github-runner`, as for the slots,
-  started with `run.sh` instead of its entrypoint, so ARC's JIT config
-  registers it per job. Not the official `actions/actions-runner`: Jobs
-  that run directly on the runner, without `container:` (e.g.
-  `secrets-manager`), need its `node` (`setup-terraform`'s wrapper), AWS
-  CLI and Debian `apt`. The official image's Ubuntu 24.04 has neither
-  `node` on `PATH` nor an `awscli` package (2026-11-01). The runner never
-  self-updates (bump the image instead).
-- **Two caches: Terraform providers per repository, and the registry
-  cache.** Everything else starts empty (`emptyDir`): checkouts, tool
-  caches, dind's image store. The
-  Terraform plugin cache (`TF_PLUGIN_CACHE_DIR`, `/terraform-plugin-cache`)
-  is a hostPath on `k3s-node-2`, `/var/lib/terraform-plugin-cache/<repo>`,
-  so `terraform init` symlinks providers instead of downloading and
-  unpacking them (~70 s per job before, 2026-11-16, tracker #52).
-  - *Trust:* PR checks and the apply on `main` share their repository's
-    cache, so a job can leave a provider for a later one. Terraform uses a
-    cache entry only if it matches a hash in that job's own lock file, so
-    a planted provider fails `init` instead of running (tested
-    2026-11-16). Repositories never see each other's cache. Fork PRs
-    never run here.
-  - *Pruning:* Terraform never deletes from the cache. An init container
-    removes provider versions older than 14 days at Pod start; such a
-    version downloads once more.
-  - *Concurrency:* the cache isn't safe for concurrent writers. Two jobs
-    of one repository fetching a new version at once, or a prune under a
-    running job, can fail one `init`; a re-run fixes it.
+  CI never competes with anything on `k3s-node-1`.
 - **No Kubernetes API access.** Every runner Pod has
-  `automountServiceAccountToken: false`. Until 2026-11-15 `k3s-apps`'
-  runners mounted the `k3s-apps-ci` token for its Terraform.
-- **Network policy.** Runner Pods execute whatever a workflow says, inside
-  a privileged dind, on the same flat Pod network as every app. Their
-  policies allow no ingress; egress only to DNS and the public internet
-  (private and link-local ranges excluded). No runner mounts a
-  ServiceAccount token or reaches the Kubernetes API (since 2026-11-15,
-  when `k3s-apps`' CI lost its Terraform). Enforced by k3s's embedded
-  network-policy controller, selected by the Pod label
-  `github-runner: "true"`. `stalwart-config`'s runners (`github-runner-stalwart-api: "true"`) reach
-  only Stalwart's management API on 8080, no Kubernetes API. Every runner
-  reaches the registry cache on 5000 (below).
-- **Registry cache.** `registry-cache` (`registry_cache.tf`, CNCF
-  Distribution in proxy mode) is a read-only pull-through cache for
-  `ghcr.io` on `k3s-node-2`, blobs on the hostPath `/var/lib/registry-cache`,
-  dropped 7 days after their last pull. Pulling a CI image from GHCR into
-  a fresh dind took ~30 s of a job's ~45 s "Initialize containers"
-  (2026-11-16, tracker #52); unpacking (~12 s) stays.
-  - *Addressing:* dockerd's `registry-mirrors` only covers Docker Hub, so
-    the runner exports `GHCR_CACHE` and `gha-common`'s build-image job
-    hands later jobs `<GHCR_CACHE>/kandlerli/<repo>-ci:<tag>` instead of
-    `ghcr.io/…`. dind lists the cache in `insecure-registries`: plain HTTP
-    inside the cluster, like every other in-cluster hop.
-  - *Credential:* it pulls with `k3s-apps/ghcr-pull-token`, read into a
-    Secret at apply time. That token is account-wide, so any runner can
-    pull any private KandlerLi package through the cache, not just its own
-    repository's (accepted 2026-11-16: the packages are CI images and
-    `sankey-export`, holding no secrets). Rotating the token needs a
-    re-apply here.
-  - *Trust:* nobody can push to a proxy-mode registry. It resolves tags
-    against GHCR on each pull and serves blobs by digest, which dockerd
-    verifies.
-  - *Network:* ingress only from runner Pods on 5000; egress only to DNS
-    and the public internet on 443.
+  `automountServiceAccountToken: false`.
+- **Network policy.** Runner Pods execute whatever a workflow says, on the
+  same flat Pod network as every app. Their policies allow no ingress;
+  egress only to DNS and the public internet (private and link-local
+  ranges excluded). Enforced by k3s's embedded network-policy controller,
+  selected by the Pod label `github-runner: "true"`. `stalwart-config`'s
+  runners (`github-runner-stalwart-api: "true"`) also reach Stalwart's
+  management API on 8080, nothing else in the cluster.
 
 ## Storage
 
@@ -239,11 +165,10 @@ no workloads. `ci` exists for two boundaries:
   Reloader) has a Role in `ci`, so none of it reaches the runner scale
   sets or the GitHub App key in `arc-github-app`, which registers
   runners for every repository.
-- **Pod Security Admission:** `ci` is labelled `enforce: privileged`,
-  since `dind` needs `privileged: true`. As the other namespaces get
-  `baseline`, `ci` and `node-exporter` stay the only places a privileged
-  Pod can run. `auth`, `monitoring` (tracker #45) and `apps` (tracker
-  #50) enforce `restricted`.
+- **Pod Security Admission:** `ci` enforces `restricted` (since
+  2026-11-26, when the runners lost `dind`), like `auth`, `monitoring`
+  (tracker #45) and `apps` (tracker #50). `node-exporter` is the only
+  namespace where a privileged Pod can run.
   `default` enforces `baseline` (`psa.tf`); `kube-system` stays
   unlabelled, k3s' own components need it.
 
@@ -258,7 +183,7 @@ ServiceAccount lives in `apps`, with cluster-wide read access only.
 
 `node-exporter` holds only the node-exporter DaemonSet (`node_exporter.tf`,
 imported from k3s-apps), which needs the host's network, PID namespace
-and root filesystem; it is labelled `enforce: privileged` like `ci`.
+and root filesystem; it is labelled `enforce: privileged`.
 
 ## RBAC
 
