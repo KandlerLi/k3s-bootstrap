@@ -26,10 +26,8 @@ jobs:
       matrix:
         # Keep in sync with modules/github_runner/arc.tf and eso.tf.
         include:
-          - name: dind
-            ref: docker:29.10.0-dind@sha256:4bbc7223f81db790097c6dea42fb93e05b8fead4f0431fbe6ccaba6e8473201c
           - name: github-runner
-            ref: myoung34/github-runner:2.338.2-debian-trixie@sha256:ac2f72d1a1e20a62452a9bcb11488d880adacc2ad72786e920ebc3ba264cd0a4
+            ref: ghcr.io/actions/actions-runner:2.338.2@sha256:6d0b2d80d80f143f77dcb676e50920100bbb547e39e883454d57f45ab8c31300
           - name: arc-controller
             ref: ghcr.io/actions/gha-runner-scale-set-controller:0.15.1@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90
           - name: external-secrets
