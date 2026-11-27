@@ -18,6 +18,11 @@ locals {
     }
   }
 
+  # Controller and listeners hold the GitHub App key and Pod rights in ci: never on the node that runs CI code.
+  control_plane_placement = {
+    nodeSelector = { "node-role.kubernetes.io/control-plane" = "true" }
+  }
+
   node_2_placement = {
     nodeSelector = { "kubernetes.io/hostname" = "k3s-node-2" }
     tolerations = [{
@@ -46,7 +51,7 @@ resource "helm_release" "arc_controller" {
   chart      = "gha-runner-scale-set-controller"
   version    = local.arc_chart_version
 
-  values = [yamlencode(merge(local.node_2_placement, {
+  values = [yamlencode(merge(local.control_plane_placement, {
     image = { tag = local.arc_controller_image }
     serviceAccount = {
       create = true
@@ -104,7 +109,7 @@ resource "helm_release" "arc_scale_set" {
     }
 
     listenerTemplate = {
-      spec = merge(local.node_2_placement, {
+      spec = merge(local.control_plane_placement, {
         securityContext = local.restricted_pod_security_context
         containers = [{
           name            = "listener"
