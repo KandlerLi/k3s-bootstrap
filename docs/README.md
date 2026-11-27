@@ -97,16 +97,19 @@ The slots before that, and every bug found building both: `home-infra-docs`'
   `roll-out.sh` points `DOCKER_CONFIG` at an empty directory, since Helm
   would otherwise send a stale `ghcr.io` login and get a 403 on the
   public charts.
-- **Placement.** Controller, listeners and runners are pinned to
-  `k3s-node-2` and tolerate its `ci=github-runner:NoSchedule` taint, so
-  CI never competes with anything on `k3s-node-1`.
+- **Placement.** Runners are pinned to `k3s-node-2` and tolerate its
+  `ci=github-runner:NoSchedule` taint, so CI never competes with anything
+  on `k3s-node-1`. The controller and its listeners run on `k3s-node-1`
+  (control-plane node selector) since 2026-11-27: they hold the GitHub
+  App key and the controller's right to create Pods in `ci`, so nothing
+  on the node that runs CI code can create Pods.
 - **No Kubernetes API access.** Every runner Pod has
   `automountServiceAccountToken: false`.
 - **Network policy.** Runner Pods execute whatever a workflow says, on the
   same flat Pod network as every app. Their policies allow no ingress;
   egress only to DNS and the public internet (private and link-local
   ranges excluded). Enforced by k3s's embedded network-policy controller,
-  selected by the Pod label `github-runner: "true"`. `stalwart-config`'s
+  for every Pod in `ci` (empty Pod selector), not only labelled runners. `stalwart-config`'s
   runners (`github-runner-stalwart-api: "true"`) also reach Stalwart's
   management API on 8080, nothing else in the cluster.
 

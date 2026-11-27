@@ -7,9 +7,8 @@ resource "kubernetes_network_policy_v1" "github_runner_isolation" {
   }
 
   spec {
-    pod_selector {
-      match_labels = { "github-runner" = "true" }
-    }
+    # Every Pod in ci, not only labelled runners.
+    pod_selector {}
 
     policy_types = ["Ingress", "Egress"]
 
