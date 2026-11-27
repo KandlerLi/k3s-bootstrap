@@ -279,7 +279,34 @@ release because Helm can't map an Application before its CRD exists.
   doubling to 10 min); Argo CD otherwise tries each commit only once.
 - **Removing it:** see k3s-apps' docs, "Argo CD", to hand the landing
   page back to Terraform first, then delete `argocd.tf` and the route;
-  the uninstall removes the CRDs too (`crds.keep = false`).
+  the uninstall removes the CRDs too (`crds.keep = false`). The platform
+  instance below uses the same CRDs, so remove it first.
+
+## Platform Argo CD
+
+`argocd_platform.tf` runs a second Argo CD in `argocd-platform` (ADR 0037
+in home-infra-docs). It is meant to take over this repo's cluster-wide layer
+stage by stage, from manifests under `platform/`. Its own install stays
+here, applied locally (stage 0).
+
+- **Stage 0a (now): headless.** Admin login, Dex, exec and anonymous
+  access are off, and there is no route or OIDC client yet, so nobody can
+  log in or sync. The root Application `platform-root` points at
+  `platform/`, which holds an empty `kustomization.yaml`.
+- **Cluster-wide:** `createClusterRoles = true`, unlike the apps instance.
+  Its AppProject `platform` allows only this repo and every kind.
+- **Sync by hand only:** no `syncPolicy.automated` and no prune, on any
+  Application (ADR 0037, Decision 5). A merge to `main` shows up as
+  OutOfSync and changes nothing until Julian syncs it.
+- **Next to the apps instance:** the release name keeps its ClusterRoles
+  apart, `installationID = "platform"` keeps the resource tracking apart,
+  and `crds.install = false` leaves the Application CRDs to the apps
+  instance's release. Each controller handles only the Applications in
+  its own namespace.
+- **Without the UI:** `k3s-tunnel`, then
+  `KUBECONFIG=~/.kube/k3s-node-1.yaml argocd admin dashboard -n argocd-platform`.
+- **Stage 0b:** UI with no public DNS record, LAN-only allowlist,
+  Authelia forward-auth and OIDC; notifications on OutOfSync and every sync.
 
 ## External Secrets
 
