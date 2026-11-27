@@ -276,7 +276,6 @@ locals {
     paperless-data     = "5Gi"
     paperless-postgres = "2Gi"
     stalwart           = "5Gi"
-    minecraft          = "10Gi"
   }
 }
 
