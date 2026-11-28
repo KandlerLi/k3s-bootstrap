@@ -271,7 +271,11 @@ release because Helm can't map an Application before its CRD exists.
   the local admin, Dex, anonymous access and exec are off. Argo CD's RBAC
   gives `role:admin` to the `admins` group and nothing to anyone else.
   The client secret's plaintext half comes from `home-infra/argocd`
-  (`secrets.tf`, runbook in secrets-manager). `auth.jkandler.de` is
+  (`secrets.tf`, runbook in secrets-manager) into the Secret
+  `argocd-oidc-authelia` (labelled `app.kubernetes.io/part-of: argocd`),
+  which `oidc.config` references as `$argocd-oidc-authelia:clientSecret`.
+  So the Helm values hold no secret, and the Secret stays a local apply
+  when the install moves to the platform Argo CD (stage 6). `auth.jkandler.de` is
   pinned to Traefik's ClusterIP (`hostAliases`), like Vaultwarden.
 - **Without the UI:** `k3s-tunnel`, then, with the `argocd` CLI,
   `KUBECONFIG=~/.kube/k3s-node-1.yaml argocd admin dashboard -n argocd`
@@ -301,10 +305,12 @@ release because Helm can't map an Application before its CRD exists.
 - **Sync:** automated with prune and self-heal on `main`, so the k3s-apps
   merge remains the only gate. A failed sync retries five times (30 s
   doubling to 10 min); Argo CD otherwise tries each commit only once.
-- **Removing it:** see k3s-apps' docs, "Argo CD", to hand the landing
-  page back to Terraform first, then delete `argocd.tf` and the route;
-  the uninstall removes the CRDs too (`crds.keep = false`). The platform
-  instance below uses the same CRDs, so remove it first.
+- **CRDs:** this release installs the Application CRDs that both
+  instances use. Since stage 6a they carry `helm.sh/resource-policy: keep`
+  (`crds.keep = true`) and `argocd.argoproj.io/sync-options:
+  ServerSideApply=true,Prune=false,Delete=false`, so neither a Helm
+  uninstall nor an Argo CD sync ever deletes them; deleting a CRD would
+  delete every Application of both instances.
 
 ## Platform Argo CD
 

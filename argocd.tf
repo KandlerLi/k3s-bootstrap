@@ -65,8 +65,13 @@ resource "helm_release" "argocd" {
   values = [yamlencode({
     # No ClusterRoles: the controller reaches apps only through argocd_apps below.
     createClusterRoles = false
-    # So removing the trial in Terraform removes the CRDs too.
-    crds = { keep = false }
+    # The Application CRDs serve both Argo CD instances: never deleted, neither by Helm nor by Argo CD (ADR 0037, stage 6).
+    crds = {
+      keep = true
+      annotations = {
+        "argocd.argoproj.io/sync-options" = "ServerSideApply=true,Prune=false,Delete=false"
+      }
+    }
 
     global = {
       image         = regex(local.image_parts, local.argocd_image)
@@ -88,10 +93,11 @@ resource "helm_release" "argocd" {
         url             = local.argocd_url
         "admin.enabled" = false
         "oidc.config" = yamlencode({
-          name         = "Authelia"
-          issuer       = "https://auth.jkandler.de"
-          clientID     = "argocd"
-          clientSecret = "$oidc.authelia.clientSecret"
+          name     = "Authelia"
+          issuer   = "https://auth.jkandler.de"
+          clientID = "argocd"
+          # A key of argocd-oidc-authelia below, so these values hold no secret.
+          clientSecret = "$argocd-oidc-authelia:clientSecret"
           # Server-side PKCE (S256), which Authelia requires of every client here.
           enablePKCEAuthentication = true
           requestedScopes          = ["openid", "profile", "email", "groups"]
@@ -150,10 +156,24 @@ resource "helm_release" "argocd" {
     }
   })]
 
-  set_sensitive = [{
-    name  = "configs.secret.extra.oidc\\.authelia\\.clientSecret"
-    value = local.home_infra_argocd["authelia_oidc_argocd_client_secret"]
-  }]
+  depends_on = [kubernetes_secret_v1.argocd_oidc_authelia]
+}
+
+# The OIDC client secret stays in this local root, like arc-github-app; Argo CD reads Secrets labelled part-of argocd.
+resource "kubernetes_secret_v1" "argocd_oidc_authelia" {
+  metadata {
+    name      = "argocd-oidc-authelia"
+    namespace = "argocd"
+    labels = {
+      "app.kubernetes.io/part-of" = "argocd"
+    }
+  }
+
+  data = {
+    clientSecret = local.home_infra_argocd["authelia_oidc_argocd_client_secret"]
+  }
+
+  type = "Opaque"
 }
 
 # Separate release: the Application CRDs must exist before Helm can map these objects.
