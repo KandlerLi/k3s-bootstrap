@@ -305,9 +305,11 @@ here, applied locally (stage 0).
   (`192.168.101.1:9096`) as Alertmanager-shaped webhooks, so they arrive
   as push like the alerts. The templates only use fields that never hold
   quotes, or the JSON would break.
-- **Root:** the root Application `platform-root` points at `platform/`,
-  which holds an empty `kustomization.yaml` until the migration stages
-  fill it.
+- **Root:** the root Application `platform-root` points at `platform/`.
+  Besides the migrated objects it holds `platform-canary`, a ConfigMap in
+  `argocd-platform`. With an empty root, the UI's sync button sent no
+  request at all (2026-11-28), and changing the canary tests the path
+  merge → OutOfSync push → sync → started/succeeded push.
 - **Cluster-wide:** `createClusterRoles = true`, unlike the apps instance.
   Its AppProject `platform` allows only this repo and every kind.
 - **Sync by hand only:** no `syncPolicy.automated` and no prune, on any
