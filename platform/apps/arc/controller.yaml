@@ -1,0 +1,45 @@
+# ARC's controller (ADR 0027): Roles in ci only (watchSingleNamespace), on k3s-node-1, never on the runner node. See README, "Runner design".
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: arc-controller
+  namespace: argocd-platform
+spec:
+  project: platform
+  source:
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
+    chart: gha-runner-scale-set-controller
+    targetRevision: 0.15.1
+    helm:
+      releaseName: arc
+      valuesObject:
+        # Controller and listeners hold the GitHub App key and Pod rights in ci: never on the node that runs CI code.
+        nodeSelector:
+          node-role.kubernetes.io/control-plane: "true"
+        image:
+          tag: 0.15.1@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90
+        serviceAccount:
+          create: true
+          name: arc-controller
+        # Its Roles then only reach ci, not every namespace.
+        flags:
+          watchSingleNamespace: ci
+          logLevel: info
+        podSecurityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-system

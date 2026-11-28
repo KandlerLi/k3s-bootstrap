@@ -1,0 +1,95 @@
+# One runner scale set per repository whose CI needs the home network (ADR 0027). The overlay per repository sets the
+# name, the Helm release name and githubConfigUrl; home-infra's sync_github_runner_repositories.py creates and removes
+# overlays from repo-infra's runner: true, and never changes an existing one. See README, "Runner design".
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: arc-runners
+  namespace: argocd-platform
+spec:
+  project: platform
+  source:
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
+    chart: gha-runner-scale-set
+    targetRevision: 0.15.1
+    helm:
+      releaseName: REPOSITORY
+      valuesObject:
+        githubConfigUrl: https://github.com/KandlerLi/REPOSITORY
+        # Terraform keeps this Secret (k3s-bootstrap's arc_github_app.tf): the App key stays out of every in-cluster role.
+        githubConfigSecret: arc-github-app
+        # self-hosted is not implicit on scale sets (tracker #39 probe), so it is listed like the others.
+        scaleSetLabels: ["self-hosted", "home", "debian"]
+        minRunners: 0
+        # Only an upper bound; the real limit is what fits on k3s-node-2.
+        maxRunners: 3
+        # Required with watchSingleNamespace: the chart can't find the controller itself.
+        controllerServiceAccount:
+          namespace: arc-system
+          name: arc-controller
+        listenerTemplate:
+          spec:
+            nodeSelector:
+              node-role.kubernetes.io/control-plane: "true"
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: listener
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: ["ALL"]
+                resources:
+                  requests:
+                    cpu: 5m
+                    memory: 32Mi
+                  limits:
+                    memory: 128Mi
+        template:
+          metadata:
+            labels:
+              github-runner: "true"
+          spec:
+            nodeSelector:
+              kubernetes.io/hostname: k3s-node-2
+            tolerations:
+              - key: ci
+                operator: Equal
+                value: github-runner
+                effect: NoSchedule
+            # No runner gets a ServiceAccount token: see README, "Runner design".
+            automountServiceAccountToken: false
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: runner
+                image: ghcr.io/actions/actions-runner:2.338.2@sha256:6d0b2d80d80f143f77dcb676e50920100bbb547e39e883454d57f45ab8c31300
+                command: ["/home/runner/run.sh"]
+                # The image's USER is a name, so runAsNonRoot needs the uid spelled out; it writes under /home/runner.
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: false
+                  capabilities:
+                    drop: ["ALL"]
+                  runAsUser: 1001
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 384Mi
+                  limits:
+                    cpu: 2000m
+                    memory: 1Gi
+                volumeMounts:
+                  - name: work
+                    mountPath: /home/runner/_work
+            volumes:
+              - name: work
+                emptyDir: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ci

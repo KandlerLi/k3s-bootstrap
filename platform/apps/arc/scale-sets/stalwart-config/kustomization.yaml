@@ -1,0 +1,20 @@
+# Created by home-infra's sync_github_runner_repositories.py; hand edits stay (the script never rewrites an existing overlay).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+nameSuffix: -stalwart-config
+patches:
+  - target:
+      kind: Application
+    patch: |-
+      - op: replace
+        path: /spec/source/helm/releaseName
+        value: stalwart-config
+      - op: replace
+        path: /spec/source/helm/valuesObject/githubConfigUrl
+        value: https://github.com/KandlerLi/stalwart-config
+      # Hand edit: only this repository's runners may reach Stalwart's management API (platform/ci/network-policies.yaml).
+      - op: add
+        path: /spec/source/helm/valuesObject/template/metadata/labels/github-runner-stalwart-api
+        value: "true"
