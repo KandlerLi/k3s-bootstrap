@@ -27,7 +27,7 @@ resource "helm_release" "argocd_platform" {
   namespace  = kubernetes_namespace_v1.argocd_platform.metadata[0].name
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
-  version    = "10.18.2"
+  version    = "10.20.0"
 
   values = [yamlencode({
     # Cluster-wide on purpose: this instance creates RBAC, PVs and namespaces.
@@ -189,7 +189,7 @@ resource "helm_release" "argocd_platform_apps" {
   namespace  = kubernetes_namespace_v1.argocd_platform.metadata[0].name
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argocd-apps"
-  version    = "2.0.8"
+  version    = "2.0.10"
 
   depends_on = [helm_release.argocd_platform]
 
