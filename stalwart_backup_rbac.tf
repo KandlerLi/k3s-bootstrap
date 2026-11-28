@@ -3,14 +3,14 @@
 resource "kubernetes_service_account_v1" "stalwart_backup" {
   metadata {
     name      = "stalwart-backup"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 }
 
 resource "kubernetes_role_v1" "stalwart_backup" {
   metadata {
     name      = "stalwart-backup"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 
   rule {
@@ -30,7 +30,7 @@ resource "kubernetes_role_v1" "stalwart_backup" {
 resource "kubernetes_role_binding_v1" "stalwart_backup" {
   metadata {
     name      = "stalwart-backup"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 
   role_ref {

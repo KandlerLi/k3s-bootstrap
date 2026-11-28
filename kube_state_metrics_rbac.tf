@@ -3,7 +3,7 @@
 resource "kubernetes_service_account_v1" "kube_state_metrics_monitoring" {
   metadata {
     name      = "kube-state-metrics"
-    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
+    namespace = "monitoring"
   }
 }
 

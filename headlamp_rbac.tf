@@ -3,7 +3,7 @@
 resource "kubernetes_service_account_v1" "headlamp" {
   metadata {
     name      = "headlamp"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 }
 
@@ -21,7 +21,7 @@ resource "kubernetes_cluster_role_binding_v1" "headlamp_view" {
   subject {
     kind      = "ServiceAccount"
     name      = kubernetes_service_account_v1.headlamp.metadata[0].name
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 }
 
@@ -75,7 +75,7 @@ resource "kubernetes_cluster_role_binding_v1" "headlamp_cluster_read" {
   subject {
     kind      = "ServiceAccount"
     name      = kubernetes_service_account_v1.headlamp.metadata[0].name
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 }
 
@@ -106,6 +106,6 @@ resource "kubernetes_cluster_role_binding_v1" "headlamp_metrics" {
   subject {
     kind      = "ServiceAccount"
     name      = kubernetes_service_account_v1.headlamp.metadata[0].name
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 }
