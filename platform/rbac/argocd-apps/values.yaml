@@ -1,7 +1,28 @@
-# Everything the apps Argo CD (namespace argocd, k3s-apps) may write, per namespace and by name; PVCs hold data, so it never
-# deletes one. Rendered into its Roles by templates/roles.yaml; argocd.tf reads the kinds from here for the apps instance's
-# resource.inclusions and AppProject. See README, "RBAC".
+# The apps Argo CD (namespace argocd, k3s-apps): its Applications, and everything it may write, per namespace and by name
+# (PVCs hold data, so it never deletes one). Rendered into its Roles, AppProject and Applications by templates/;
+# argocd.tf reads the kinds from here for resource.inclusions. A new app: an entry in applications plus its object names.
+# See README, "RBAC" and "Argo CD".
 controllerNamespace: argocd
+sourceRepo: https://github.com/KandlerLi/k3s-apps.git
+# One Application per directory under k3s-apps' argocd/, with its namespace.
+applications:
+  alertmanager: monitoring
+  alloy: monitoring
+  authelia: auth
+  blocky: apps
+  bulwark: apps
+  eurooffice: apps
+  grafana: monitoring
+  headlamp: apps
+  ingress: apps
+  kube-state-metrics: monitoring
+  landing-page: apps
+  minecraft: apps
+  nextcloud: apps
+  paperless: apps
+  sankey-export: apps
+  stalwart: apps
+  vaultwarden: apps
 objects:
   apps:
     configmaps:

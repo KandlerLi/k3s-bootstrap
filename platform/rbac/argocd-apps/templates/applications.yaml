@@ -1,0 +1,57 @@
+{{- /* The apps Argo CD's AppProject and one Application per k3s-apps directory; kinds come from the same map as the Roles. */ -}}
+{{- $kinds := list -}}
+{{- range $ns, $objs := .Values.objects -}}
+{{- range $res, $o := $objs -}}
+{{- $kinds = append $kinds (dict "group" $o.apiGroup "kind" $o.kind) -}}
+{{- end -}}
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: k3s-apps
+  namespace: {{ .Values.controllerNamespace }}
+spec:
+  description: Manifests under k3s-apps' argocd/
+  sourceRepos:
+    - {{ .Values.sourceRepo }}
+  destinations:
+  {{- range $ns, $_ := .Values.objects }}
+    - namespace: {{ $ns }}
+      server: https://kubernetes.default.svc
+  {{- end }}
+  # No cluster-scoped kinds; namespaced only those the Roles allow.
+  namespaceResourceWhitelist:
+  {{- range $k := $kinds | uniq }}
+    - group: {{ $k.group | quote }}
+      kind: {{ $k.kind }}
+  {{- end }}
+{{- range $app, $ns := .Values.applications }}
+---
+# No finalizer: deleting the Application leaves its objects running.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $app }}
+  namespace: {{ $.Values.controllerNamespace }}
+spec:
+  project: k3s-apps
+  source:
+    repoURL: {{ $.Values.sourceRepo }}
+    targetRevision: main
+    path: argocd/{{ $app }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $ns }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # Automated sync tries each commit once; retries let a transient failure (RBAC not applied yet) heal itself.
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
+{{- end }}
