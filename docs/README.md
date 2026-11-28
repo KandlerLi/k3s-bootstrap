@@ -5,7 +5,7 @@ runners (`modules/github_runner`, ARC), the three cluster-scoped
 `kubernetes_persistent_volume_v1` resources a namespace-scoped Role can
 never be granted `create` on by name (Kubernetes RBAC's `resourceNames`
 only constrains `get`/`update`/`delete` on *existing* objects), and the
-Headlamp's (the cluster UI's) own RBAC (`headlamp_rbac.tf`) for the same
+Headlamp's (the cluster UI's) own RBAC (`platform/rbac/headlamp.yaml`) for the same
 underlying reason in a different shape: granting RBAC is itself
 privilege-defining, so a CI-applied ServiceAccount can never be trusted
 to create its own ServiceAccounts, Roles, or (Cluster)RoleBindings
@@ -200,19 +200,22 @@ and root filesystem; it is labelled `enforce: privileged`.
 
 Granting RBAC is itself privilege-defining: whoever could create
 ServiceAccounts or (Cluster)RoleBindings could grant itself anything up
-to cluster-admin. So every ServiceAccount and binding lives here, applied
-locally, while `k3s-apps` only references them by name in Pod specs.
+to cluster-admin. So every ServiceAccount and binding lives here, while
+`k3s-apps` only references them by name in Pod specs. Since stage 2 of ADR
+0037 (2026-11-28) the ones below, except Argo CD's, are manifests in
+`platform/rbac/`, synced by hand by the platform Argo CD; Terraform dropped
+them with `removed { destroy = false }`.
 `k3s-apps`' former CI ServiceAccount `k3s-apps-ci` and its Roles went on
 2026-11-15 with its Terraform.
 
-- **Headlamp** (`headlamp_rbac.tf`): read-only, never cluster-admin.
+- **Headlamp** (`headlamp.yaml`): read-only, never cluster-admin.
   Every visitor past Authelia acts as this ServiceAccount
   (`-unsafe-use-service-account-token`), so its scope is the UI's scope.
   The built-in `view` ClusterRole covers namespaced resources but not
   cluster-scoped ones or RBAC, so a ClusterRole adds those. Secrets stay
   unreadable on purpose: RBAC can't grant names without values. Node/Pod
   usage metrics come from k3s' metrics-server.
-- **`stalwart-backup`** (`stalwart_backup_rbac.tf`): `get`/`patch` on
+- **`stalwart-backup`** (`stalwart-backup.yaml`): `get`/`patch` on
   `deployments/scale` of `stalwart` only, plus `list` on Pods in `apps`
   to wait until Stalwart has stopped (RBAC can't narrow `list` to a
   label). RocksDB is only consistent on disk while Stalwart is down, so
@@ -224,23 +227,25 @@ locally, while `k3s-apps` only references them by name in Pod specs.
   objects named in `local.argocd_objects` (PVCs: never delete); its
   server may only read them, plus list each namespace's Events for the UI. See
   "Argo CD".
-- **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
+- **kube-state-metrics** (`kube-state-metrics.yaml`): `view` plus read
   access to nodes, PersistentVolumes and namespaces, which its
   `--resources` list includes; Secrets excluded.
-- **Alloy** (`alloy_rbac.tf`): `get`/`list`/`watch` on Pods and `get`
+- **Alloy** (`alloy.yaml`): `get`/`list`/`watch` on Pods and `get`
   on `pods/log`, cluster-wide, so k3s-apps' Alloy can tail every Pod's
   logs through the API and push them to the homeserver's Loki
   (home-infra's `monitoring` role). No hostPath, no Secrets, no `exec`.
   Pod logs can contain whatever an app prints; they end up only in
   Loki, readable through Grafana.
-- **`prometheus-kubelet`** (`kubelet_metrics_rbac.tf`): `get` on
+- **`prometheus-kubelet`** (`prometheus-kubelet.yaml`): `get` on
   `nodes/metrics` only, for the homeserver's Prometheus scraping each
   kubelet's `/metrics/cadvisor`. Never `nodes/proxy`, which also allows
   exec into every Pod. Prometheus runs outside the cluster, so the token
   is a long-lived ServiceAccount token Secret, copied once into Secrets
-  Manager (`home-infra/prometheus`, see its runbook). To rotate it,
-  `scripts/roll-out.sh apply -replace=kubernetes_secret_v1.prometheus_kubelet_token`
-  and copy the new token.
+  Manager (`home-infra/prometheus`, see its runbook). k3s fills in the
+  token; the manifest carries only the type and the ServiceAccount
+  annotation. To rotate it, delete the Secret
+  (`kubectl -n default delete secret prometheus-kubelet-token`), sync
+  `platform-root`, and copy the new token.
 
 ## Argo CD
 
