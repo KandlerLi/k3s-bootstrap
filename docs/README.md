@@ -259,11 +259,12 @@ false }`.
 ## Argo CD
 
 `argocd.tf` runs Argo CD, which deploys k3s-apps' `argocd/<app>` (one
-Application each, `local.argocd_applications`, with its namespace)
-instead of Terraform, with its UI on `argo.jkandler.de` (ADR 0031 in
-home-infra-docs). Chart `argo-cd`, plus `argocd-apps` for the
-`k3s-apps` AppProject and the Applications; it is a second
-release because Helm can't map an Application before its CRD exists.
+Application each, with its namespace) instead of Terraform, with its UI on
+`argo.jkandler.de` (ADR 0031 in home-infra-docs). Chart `argo-cd`. Its
+`k3s-apps` AppProject and the Applications come from the chart
+`platform/rbac/argocd-apps/` (`applications` in its `values.yaml`), synced
+by hand by the platform Argo CD's `argocd-apps-rbac` since stage 6b of
+ADR 0037; until then the `argocd-apps` release.
 
 - **UI and login:** the route lives in k3s-apps and keeps Authelia
   forward-auth, limited to `user:julian`. Argo CD itself logs in only
@@ -287,9 +288,9 @@ release because Helm can't map an Application before its CRD exists.
   Deployment, CronJob, NetworkPolicy, ExternalSecret, PersistentVolumeClaim).
   The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
-  reaches no further. A new app adds its directory to
-  `local.argocd_applications` (local apply) and its object names to the
-  chart's `values.yaml` (merge, then sync `argocd-apps-rbac` by hand);
+  reaches no further. A new app is one change in the chart's `values.yaml`:
+  its directory under `applications` and its object names under `objects`
+  (merge, then sync `argocd-apps-rbac` by hand, no local apply);
   `argocd.tf` reads the kinds from that file. An Application whose directory isn't on
   k3s-apps' `main` yet only shows a path error and syncs nothing.
 - **Argo CD never touches Secrets:** it has no rule on them at all. An

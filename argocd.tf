@@ -10,26 +10,6 @@ locals {
   argocd_server = "https://kubernetes.default.svc"
   argocd_url    = "https://argo.jkandler.de"
 
-  # One Application per directory under k3s-apps' argocd/, with its namespace.
-  argocd_applications = {
-    landing-page       = "apps"
-    headlamp           = "apps"
-    bulwark            = "apps"
-    sankey-export      = "apps"
-    vaultwarden        = "apps"
-    paperless          = "apps"
-    nextcloud          = "apps"
-    eurooffice         = "apps"
-    stalwart           = "apps"
-    minecraft          = "apps"
-    ingress            = "apps"
-    blocky             = "apps"
-    authelia           = "auth"
-    alertmanager       = "monitoring"
-    alloy              = "monitoring"
-    grafana            = "monitoring"
-    kube-state-metrics = "monitoring"
-  }
 
   argocd_namespaces = {
     apps       = "apps"
@@ -63,7 +43,7 @@ resource "helm_release" "argocd" {
   version    = "10.18.2"
 
   values = [yamlencode({
-    # No ClusterRoles: the controller reaches apps only through argocd_apps below.
+    # No ClusterRoles: the controller reaches apps only through the Roles from platform/rbac/argocd-apps/.
     createClusterRoles = false
     # The Application CRDs serve both Argo CD instances: never deleted, neither by Helm nor by Argo CD (ADR 0037, stage 6).
     crds = {
@@ -176,50 +156,12 @@ resource "kubernetes_secret_v1" "argocd_oidc_authelia" {
   type = "Opaque"
 }
 
-# Separate release: the Application CRDs must exist before Helm can map these objects.
-resource "helm_release" "argocd_apps" {
-  name       = "argocd-apps"
-  namespace  = "argocd"
-  repository = "https://argoproj.github.io/argo-helm"
-  chart      = "argocd-apps"
-  version    = "2.0.8"
-
-  depends_on = [helm_release.argocd]
-
-  values = [yamlencode({
-    projects = {
-      k3s-apps = {
-        namespace    = "argocd"
-        description  = "Manifests under k3s-apps' argocd/"
-        sourceRepos  = ["https://github.com/KandlerLi/k3s-apps.git"]
-        destinations = [for ns in values(local.argocd_namespaces) : { server = local.argocd_server, namespace = ns }]
-
-        clusterResourceWhitelist   = []
-        namespaceResourceWhitelist = [for k in local.argocd_kinds : { group = k.api_group, kind = k.kind }]
-      }
-    }
-    # No finalizer: deleting the Application leaves its objects running.
-    applications = {
-      for app, ns in local.argocd_applications : app => {
-        namespace = "argocd"
-        project   = "k3s-apps"
-        source = {
-          repoURL        = "https://github.com/KandlerLi/k3s-apps.git"
-          targetRevision = "main"
-          path           = "argocd/${app}"
-        }
-        destination = { server = local.argocd_server, namespace = local.argocd_namespaces[ns] }
-        syncPolicy = {
-          automated = { prune = true, selfHeal = true }
-          # Automated sync tries each commit once; retries let a transient failure (RBAC not applied yet) heal itself.
-          retry = {
-            limit   = 5
-            backoff = { duration = "30s", factor = 2, maxDuration = "10m" }
-          }
-        }
-      }
-    }
-  })]
+# Its AppProject and Applications moved to platform/rbac/argocd-apps/ (templates/applications.yaml), synced by the platform Argo CD (ADR 0037, stage 6b).
+removed {
+  from = helm_release.argocd_apps
+  lifecycle {
+    destroy = false
+  }
 }
 
 # Its Roles moved to platform/rbac/argocd-apps/, synced by the platform Argo CD (ADR 0037, stage 2).
