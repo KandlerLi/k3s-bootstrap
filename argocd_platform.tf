@@ -187,9 +187,10 @@ resource "helm_release" "argocd_platform_apps" {
   values = [yamlencode({
     projects = {
       platform = {
-        namespace                = kubernetes_namespace_v1.argocd_platform.metadata[0].name
-        description              = "This repo's platform/, synced by hand"
-        sourceRepos              = [local.argocd_platform_repo]
+        namespace   = kubernetes_namespace_v1.argocd_platform.metadata[0].name
+        description = "This repo's platform/, synced by hand"
+        # This repo, plus the public chart repos its Applications pull (platform/apps/).
+        sourceRepos              = [local.argocd_platform_repo, "https://stakater.github.io/stakater-charts"]
         destinations             = [{ server = local.argocd_server, namespace = "*" }]
         clusterResourceWhitelist = [{ group = "*", kind = "*" }]
       }

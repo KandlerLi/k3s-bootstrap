@@ -1,0 +1,47 @@
+# Reloader, one namespace-scoped instance per app namespace (ADR 0032): restarts only Deployments that opt in by annotation.
+# The overlays set the name and the namespace; values match what eso.tf rendered, so adopting it changes nothing.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reloader
+  namespace: argocd-platform
+spec:
+  project: platform
+  source:
+    repoURL: https://stakater.github.io/stakater-charts
+    chart: reloader
+    targetRevision: 2.2.20
+    helm:
+      releaseName: reloader
+      valuesObject:
+        image:
+          repository: ghcr.io/stakater/reloader
+          tag: v1.4.25@sha256:db8b1818f5da373ab85c05b30220fcae80a9ac0532052e6d68a6a5999111f18f
+        reloader:
+          # Role in its namespace only; restarts only Deployments that opt in by annotation.
+          watchGlobally: false
+          autoReloadAll: false
+          # The apps Argo CD ignores the pod-template annotation this strategy sets; env-vars would fight selfHeal.
+          reloadStrategy: annotations
+          ignoreConfigMaps: true
+          ignoreJobs: true
+          ignoreCronJobs: true
+          readOnlyRootFileSystem: true
+          deployment:
+            containerSecurityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps

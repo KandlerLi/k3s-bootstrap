@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Keep in sync with modules/github_runner/arc.tf and eso.tf.
+        # Keep in sync with modules/github_runner/arc.tf, eso.tf and platform/apps/reloader/.
         include:
           - name: github-runner
             ref: ghcr.io/actions/actions-runner:2.338.2@sha256:6d0b2d80d80f143f77dcb676e50920100bbb547e39e883454d57f45ab8c31300

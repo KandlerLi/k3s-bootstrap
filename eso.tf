@@ -1,12 +1,10 @@
-# External Secrets Operator and Reloader, one namespace-scoped instance each per app namespace: see README, "External Secrets" (ADR 0032).
+# External Secrets Operator, one namespace-scoped instance per app namespace: see README, "External Secrets" (ADR 0032). Reloader is in platform/apps/reloader/.
 
 data "aws_caller_identity" "current" {}
 
 locals {
-  eso_chart_version      = "2.15.0"
-  eso_image              = "ghcr.io/external-secrets/external-secrets:v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31"
-  reloader_chart_version = "2.2.20"
-  reloader_image         = "ghcr.io/stakater/reloader:v1.4.25@sha256:db8b1818f5da373ab85c05b30220fcae80a9ac0532052e6d68a6a5999111f18f"
+  eso_chart_version = "2.15.0"
+  eso_image         = "ghcr.io/external-secrets/external-secrets:v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31"
 
   # Same namespaces as Argo CD's; terraform-state's k3s-eso-<namespace> roles trust their external-secrets ServiceAccount.
   eso_namespaces = local.argocd_namespaces
@@ -110,37 +108,10 @@ resource "helm_release" "external_secrets" {
   depends_on = [helm_release.external_secrets_crds]
 }
 
-resource "helm_release" "reloader" {
-  for_each = local.eso_namespaces
-
-  name       = "reloader"
-  namespace  = each.value
-  repository = "https://stakater.github.io/stakater-charts"
-  chart      = "reloader"
-  version    = local.reloader_chart_version
-
-  values = [yamlencode({
-    image = {
-      repository = regex(local.image_parts, local.reloader_image).repository
-      tag        = regex(local.image_parts, local.reloader_image).tag
-    }
-    reloader = {
-      # Role in this namespace only; restarts only Deployments that opt in by annotation.
-      watchGlobally = false
-      autoReloadAll = false
-      # Argo CD ignores the pod-template annotation this strategy sets; env-vars would fight selfHeal.
-      reloadStrategy         = "annotations"
-      ignoreConfigMaps       = true
-      ignoreJobs             = true
-      ignoreCronJobs         = true
-      readOnlyRootFileSystem = true
-      deployment = {
-        containerSecurityContext = local.eso_container_security
-        resources = {
-          requests = { cpu = "10m", memory = "32Mi" }
-          limits   = { memory = "128Mi" }
-        }
-      }
-    }
-  })]
+# Reloader moved to platform/apps/reloader/, synced by the platform Argo CD (ADR 0037, stage 3a).
+removed {
+  from = helm_release.reloader
+  lifecycle {
+    destroy = false
+  }
 }
