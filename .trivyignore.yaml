@@ -1,0 +1,20 @@
+# Findings that are by design, each scoped to one file (gha-common trivy-config's trivyignores input). Re-check before expired_at.
+misconfigurations:
+  # The apps Argo CD deploys k3s-apps: it must create and change Deployments, CronJobs, ConfigMaps, Services and
+  # NetworkPolicies in apps, auth and monitoring. Changes are limited to named objects; it has no rule on Secrets,
+  # RBAC or PVs (README, "RBAC"). Live since 2026-11-14 as Terraform; flagged once the Roles became a Helm chart.
+  - id: KSV-0048
+    paths:
+      - "platform/rbac/argocd-apps/templates/roles.yaml"
+    statement: "The apps Argo CD's controller manages k3s-apps' Deployments and CronJobs by name (ADR 0031, 0037)."
+    expired_at: 2027-11-30
+  - id: KSV-0049
+    paths:
+      - "platform/rbac/argocd-apps/templates/roles.yaml"
+    statement: "The apps Argo CD's controller manages k3s-apps' ConfigMaps by name (ADR 0031, 0037)."
+    expired_at: 2027-11-30
+  - id: KSV-0056
+    paths:
+      - "platform/rbac/argocd-apps/templates/roles.yaml"
+    statement: "The apps Argo CD's controller manages k3s-apps' Services and NetworkPolicies by name (ADR 0031, 0037)."
+    expired_at: 2027-11-30
