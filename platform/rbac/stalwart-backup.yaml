@@ -1,0 +1,35 @@
+# k3s-apps' Stalwart backup CronJob stops Stalwart for a consistent copy: see README, "RBAC".
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stalwart-backup
+  namespace: apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: stalwart-backup
+  namespace: apps
+rules:
+  - apiGroups: ["apps"]
+    resources: [deployments/scale]
+    resourceNames: [stalwart]
+    verbs: [patch, get]
+  # To wait until Stalwart's Pod is gone; list can't be limited to one label.
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stalwart-backup
+  namespace: apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: stalwart-backup
+subjects:
+  - kind: ServiceAccount
+    name: stalwart-backup
+    namespace: apps

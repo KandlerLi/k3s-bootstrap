@@ -1,0 +1,39 @@
+# Prometheus on the homeserver scrapes kubelet's cAdvisor endpoint with this token: see README, "RBAC".
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-kubelet
+  namespace: default
+---
+# nodes/metrics only; nodes/proxy would also allow exec into every Pod.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubelet-metrics-read
+rules:
+  - apiGroups: [""]
+    resources: [nodes/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-kubelet
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubelet-metrics-read
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-kubelet
+    namespace: default
+---
+# Long-lived, since Prometheus runs outside the cluster; k3s fills in the token, which never enters Git. Rotate by deleting the Secret and syncing.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-kubelet-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: prometheus-kubelet
+type: kubernetes.io/service-account-token
