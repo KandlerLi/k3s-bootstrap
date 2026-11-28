@@ -343,24 +343,31 @@ here, applied locally (stage 0).
 
 ## External Secrets
 
-`eso.tf` installs the External Secrets Operator (ESO), and the platform Argo CD runs Reloader, for
+Since stage 3 of ADR 0037 (2026-11-28) the platform Argo CD runs the External Secrets Operator (ESO) and Reloader, for
 [ADR 0032](https://github.com/KandlerLi/home-infra-docs/blob/main/docs/adr/0032-cluster-secrets-through-external-secrets.md):
 Kubernetes Secrets come from AWS Secrets Manager instead of a Terraform apply.
 
 - **One instance per namespace** (`apps`, `auth`, `monitoring`), each with
   Roles in its own namespace only and no ClusterRole, so neither can touch
-  Secrets in `kube-system`, `argocd`, `ci` or `arc-system`. The CRDs
-  (namespaced kinds only) sit in their own release, `external-secrets-crds`,
-  so removing one controller never deletes every ExternalSecret. No
-  validating webhook: it needs cluster-scoped access.
-- **AWS login.** Each namespace's `external-secrets` ServiceAccount carries
+  Secrets in `kube-system`, `argocd`, `ci` or `arc-system`. They are the
+  Applications `external-secrets-apps|-auth|-monitoring` from
+  `platform/apps/external-secrets/` (one base with chart version and values,
+  an overlay per namespace), synced by hand. The CRDs (namespaced kinds
+  only) are their own Application, `external-secrets-crds`, synced with
+  server-side apply (too large for client-side apply), so removing one
+  controller never deletes every ExternalSecret. No validating webhook: it
+  needs cluster-scoped access.
+- **AWS login.** Each namespace's `external-secrets` ServiceAccount stays in
+  `eso.tf` (local apply), so the role ARN's account ID never enters Git and
+  the trust anchor stays with the locally applied root. It carries
   `eks.amazonaws.com/role-arn` for `terraform-state`'s `k3s-eso-<namespace>`
   role; ESO exchanges a ServiceAccount token (audience `sts.amazonaws.com`,
   issuer = k3s' public issuer) for that role. The role may read only the
   Secrets Manager groups that namespace's Pods use (`terraform-state`,
   "k3s OIDC federation").
-- **SecretStore** `aws-secrets-manager` in each namespace, created here,
-  never by Argo CD: it binds the namespace to its role. The ExternalSecrets
+- **SecretStore** `aws-secrets-manager` in each namespace, from the
+  ESO Application's values (`extraObjects`), never by the apps Argo CD: it
+  binds the namespace to its role. The ExternalSecrets
   themselves live next to each app in `k3s-apps`' `argocd/`.
 - **Reloader** restarts a Deployment that carries
   `secret.reloader.stakater.com/reload: <secret>` when that Secret changes,

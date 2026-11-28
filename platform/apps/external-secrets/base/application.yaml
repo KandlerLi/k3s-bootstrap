@@ -1,0 +1,78 @@
+# External Secrets Operator, one namespace-scoped instance per app namespace (ADR 0032), plus its SecretStore.
+# The overlays set the name, the namespace and the two namespace fields below. Values match what eso.tf rendered.
+# The external-secrets ServiceAccount (with its IAM role, the AWS trust anchor) stays in eso.tf: the account ID never enters Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets
+  namespace: argocd-platform
+spec:
+  project: platform
+  source:
+    repoURL: https://charts.external-secrets.io
+    chart: external-secrets
+    targetRevision: 2.15.0
+    helm:
+      releaseName: external-secrets
+      valuesObject:
+        installCRDs: false
+        # Roles in this namespace only, no ClusterRole.
+        scopedNamespace: apps
+        scopedRBAC: true
+        processClusterExternalSecret: false
+        processClusterPushSecret: false
+        processClusterStore: false
+        processClusterGenerator: false
+        processPushSecret: false
+        openshiftFinalizers: false
+        # The validating webhook and its cert controller need cluster-scoped access; kubectl's schema check suffices here.
+        webhook:
+          create: false
+        certController:
+          create: false
+        image:
+          repository: ghcr.io/external-secrets/external-secrets
+          tag: v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31
+        serviceAccount:
+          create: false
+          name: external-secrets
+        rbac:
+          servicebindings:
+            create: false
+          aggregateToView: false
+          aggregateToEdit: false
+          aggregateToAdmin: false
+        securityContext:
+          enabled: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+        extraObjects:
+          - apiVersion: external-secrets.io/v1
+            kind: SecretStore
+            metadata:
+              name: aws-secrets-manager
+              namespace: apps
+            spec:
+              provider:
+                aws:
+                  service: SecretsManager
+                  region: eu-central-1
+                  auth:
+                    jwt:
+                      serviceAccountRef:
+                        name: external-secrets
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps

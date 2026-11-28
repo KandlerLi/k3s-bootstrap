@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - argocd-apps-rbac.yaml
   - reloader
+  - external-secrets
