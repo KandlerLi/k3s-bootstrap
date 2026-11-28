@@ -68,6 +68,15 @@ resource "helm_release" "argocd_platform" {
       }
       # Traefik terminates TLS.
       params = { "server.insecure" = true }
+      # ARC's charts are only published as OCI artifacts.
+      repositories = {
+        arc-charts = {
+          name      = "arc-charts"
+          type      = "helm"
+          url       = "ghcr.io/actions/actions-runner-controller-charts"
+          enableOCI = "true"
+        }
+      }
       # Authelia already admits only julian; admins is a second gate.
       rbac = {
         "policy.default" = ""
@@ -190,7 +199,7 @@ resource "helm_release" "argocd_platform_apps" {
         namespace   = kubernetes_namespace_v1.argocd_platform.metadata[0].name
         description = "This repo's platform/, synced by hand"
         # This repo, plus the public chart repos its Applications pull (platform/apps/).
-        sourceRepos              = [local.argocd_platform_repo, "https://stakater.github.io/stakater-charts", "https://charts.external-secrets.io"]
+        sourceRepos              = [local.argocd_platform_repo, "https://stakater.github.io/stakater-charts", "https://charts.external-secrets.io", "ghcr.io/actions/actions-runner-controller-charts"]
         destinations             = [{ server = local.argocd_server, namespace = "*" }]
         clusterResourceWhitelist = [{ group = "*", kind = "*" }]
       }

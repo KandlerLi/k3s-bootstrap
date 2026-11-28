@@ -5,4 +5,5 @@ resources:
   - canary.yaml
   - namespaces
   - rbac
+  - ci
   - apps

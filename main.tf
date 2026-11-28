@@ -1,4 +1,4 @@
-# Bootstrap root: the runner, cluster-scoped PVs and privilege-defining RBAC. See README.
+# Bootstrap root: what stays a local apply (ADR 0037). See README.
 
 # Namespaces and their PSA labels moved to platform/namespaces/, synced by the platform Argo CD (ADR 0037, stage 1).
 removed {
@@ -55,18 +55,4 @@ removed {
   lifecycle {
     destroy = false
   }
-}
-
-module "github_runner" {
-  source = "./modules/github_runner"
-
-  namespace                = "ci"
-  arc_controller_namespace = "arc-system"
-
-  github_runner_app_id              = local.home_infra_github_runner["app_id"]
-  github_runner_app_private_key     = local.home_infra_github_runner["app_private_key"]
-  github_runner_app_installation_id = var.github_runner_app_installation_id
-  github_runner_repositories        = var.github_runner_repositories
-
-  github_runner_stalwart_api_repositories = ["stalwart-config"]
 }
