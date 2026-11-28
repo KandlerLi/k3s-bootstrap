@@ -1,0 +1,17 @@
+# Child Application for the Helm chart with the apps Argo CD's Roles. Like platform-root: no automated sync, no finalizer (ADR 0037, Decision 5).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-apps-rbac
+  namespace: argocd-platform
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/KandlerLi/k3s-bootstrap.git
+    targetRevision: main
+    path: platform/rbac/argocd-apps
+    helm:
+      releaseName: argocd-apps-rbac
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd

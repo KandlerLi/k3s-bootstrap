@@ -13,9 +13,10 @@ on:
 
 jobs:
   trivy-config:
-    uses: KandlerLi/gha-common/.github/workflows/trivy-config.yml@v1.2.0
+    uses: KandlerLi/gha-common/.github/workflows/trivy-config.yml@v2.1.0
     with:
       runs_on: '["ubuntu-latest"]'
+      trivyignores: .trivyignore.yaml
     permissions:
       contents: read
 
