@@ -18,3 +18,36 @@ misconfigurations:
       - "platform/rbac/argocd-apps/templates/roles.yaml"
     statement: "The apps Argo CD's controller manages k3s-apps' Services and NetworkPolicies by name (ADR 0031, 0037)."
     expired_at: 2027-11-30
+  # node-exporter reports the node's own stats to the homeserver's Prometheus: it needs the host's network, PID
+  # namespace and read-only /, /proc and /sys, and a host port. That is why its namespace alone stays privileged
+  # (README, "Namespaces"). Flagged once the DaemonSet moved from Terraform to platform/ (stage 5b).
+  - id: KSV-0009
+    paths:
+      - "platform/node-exporter/daemonset.yaml"
+    statement: "node-exporter needs hostNetwork for real node stats and direct scraping from the homeserver."
+    expired_at: 2027-11-30
+  - id: KSV-0010
+    paths:
+      - "platform/node-exporter/daemonset.yaml"
+    statement: "node-exporter needs hostPID to see the node's processes."
+    expired_at: 2027-11-30
+  - id: KSV-0023
+    paths:
+      - "platform/node-exporter/daemonset.yaml"
+    statement: "node-exporter reads /, /proc and /sys of the node, mounted read-only."
+    expired_at: 2027-11-30
+  - id: KSV-0121
+    paths:
+      - "platform/node-exporter/daemonset.yaml"
+    statement: "node-exporter reads /, /proc and /sys of the node, mounted read-only."
+    expired_at: 2027-11-30
+  - id: KSV-0024
+    paths:
+      - "platform/node-exporter/daemonset.yaml"
+    statement: "Port 9100 on each node is the homeserver Prometheus' scrape target."
+    expired_at: 2027-11-30
+  - id: KSV-0125
+    paths:
+      - "platform/node-exporter/daemonset.yaml"
+    statement: "Same digest-pinned prom/node-exporter image as home-infra's node_exporter, so metric names never diverge."
+    expired_at: 2027-11-30

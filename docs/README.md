@@ -198,8 +198,8 @@ change its targets.
 included (both `enforce: restricted`). Headlamp's
 ServiceAccount lives in `apps`, with cluster-wide read access only.
 
-`node-exporter` holds only the node-exporter DaemonSet (`node_exporter.tf`,
-imported from k3s-apps), which needs the host's network, PID namespace
+`node-exporter` holds only the node-exporter DaemonSet (`platform/node-exporter/`,
+synced by the platform Argo CD since stage 5b of ADR 0037; originally imported from k3s-apps), which needs the host's network, PID namespace
 and root filesystem; it is labelled `enforce: privileged`.
 
 ## RBAC

@@ -6,5 +6,6 @@ resources:
   - namespaces
   - rbac
   - ci
+  - node-exporter
   - storage
   - apps
