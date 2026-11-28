@@ -1,0 +1,80 @@
+# Every namespace k3s-bootstrap owns, with its Pod Security level (README, "Namespaces"). Never pruned or deleted by Argo CD.
+# Every remaining k3s-apps workload, Traefik included.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# Authelia.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# Grafana, Alertmanager, kube-state-metrics, Alloy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# The runner Pods (no Docker or root since 2026-11-26).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# The ARC controller and its listeners.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# node-exporter alone: it needs the host's network, PID namespace and filesystem.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-exporter
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# The apps Argo CD (its install stays in argocd.tf until stage 7).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+# k3s creates it; only its PSA label is managed here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

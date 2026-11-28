@@ -9,7 +9,7 @@ import {
 resource "kubernetes_daemon_set_v1" "node_exporter" {
   metadata {
     name      = "node-exporter"
-    namespace = kubernetes_namespace_v1.node_exporter.metadata[0].name
+    namespace = "node-exporter"
   }
 
   spec {

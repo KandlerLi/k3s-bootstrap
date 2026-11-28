@@ -32,9 +32,9 @@ locals {
   }
 
   argocd_namespaces = {
-    apps       = kubernetes_namespace_v1.apps.metadata[0].name
-    auth       = kubernetes_namespace_v1.auth.metadata[0].name
-    monitoring = kubernetes_namespace_v1.monitoring.metadata[0].name
+    apps       = "apps"
+    auth       = "auth"
+    monitoring = "monitoring"
   }
 
   # Everything Argo CD may write, per namespace and by name; PVCs hold data, so Argo CD never deletes one.
@@ -75,26 +75,17 @@ locals {
   }
 }
 
-resource "kubernetes_namespace_v1" "argocd" {
-  metadata {
-    name = "argocd"
-    labels = {
-      "pod-security.kubernetes.io/enforce" = "restricted"
-    }
-  }
-}
-
 # Traefik's ClusterIP: Argo CD reaches Authelia in-cluster instead of hairpinning through the router.
 data "kubernetes_service_v1" "ingress" {
   metadata {
     name      = "ingress-svc"
-    namespace = kubernetes_namespace_v1.apps.metadata[0].name
+    namespace = "apps"
   }
 }
 
 resource "helm_release" "argocd" {
   name       = "argocd"
-  namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
+  namespace  = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
   version    = "10.18.2"
@@ -196,7 +187,7 @@ resource "helm_release" "argocd" {
 # Separate release: the Application CRDs must exist before Helm can map these objects.
 resource "helm_release" "argocd_apps" {
   name       = "argocd-apps"
-  namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
+  namespace  = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argocd-apps"
   version    = "2.0.8"
@@ -206,7 +197,7 @@ resource "helm_release" "argocd_apps" {
   values = [yamlencode({
     projects = {
       k3s-apps = {
-        namespace    = kubernetes_namespace_v1.argocd.metadata[0].name
+        namespace    = "argocd"
         description  = "Manifests under k3s-apps' argocd/"
         sourceRepos  = ["https://github.com/KandlerLi/k3s-apps.git"]
         destinations = [for ns in values(local.argocd_namespaces) : { server = local.argocd_server, namespace = ns }]
@@ -218,7 +209,7 @@ resource "helm_release" "argocd_apps" {
     # No finalizer: deleting the Application leaves its objects running.
     applications = {
       for app, ns in local.argocd_applications : app => {
-        namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+        namespace = "argocd"
         project   = "k3s-apps"
         source = {
           repoURL        = "https://github.com/KandlerLi/k3s-apps.git"
@@ -309,7 +300,7 @@ resource "kubernetes_role_binding_v1" "argocd_controller" {
   subject {
     kind      = "ServiceAccount"
     name      = "argocd-application-controller"
-    namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+    namespace = "argocd"
   }
 }
 
@@ -352,6 +343,6 @@ resource "kubernetes_role_binding_v1" "argocd_server" {
   subject {
     kind      = "ServiceAccount"
     name      = "argocd-server"
-    namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+    namespace = "argocd"
   }
 }

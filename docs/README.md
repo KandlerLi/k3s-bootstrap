@@ -157,6 +157,15 @@ and reference these PVs by name.
 
 ## Namespaces
 
+Since stage 1 of ADR 0037 (2026-11-28) the namespaces and their PSA labels
+are manifests in `platform/namespaces/`, synced by hand by the platform Argo
+CD (see "Platform Argo CD"), and annotated `Prune=false,Delete=false`, so
+Argo CD never deletes one. Terraform dropped them with `removed { destroy
+= false }`, and its resources name them as plain strings. Only
+`argocd-platform` stays in Terraform (stage 0). On a fresh cluster the
+order is: apply, which stops at the first namespace that doesn't exist yet;
+sync `platform-root`; apply again.
+
 The runners live in `ci`, the ARC controller and its listeners in
 `arc-system` (`enforce: restricted`); Grafana, Alertmanager, kube-state-metrics
 and Alloy in `monitoring`; Authelia in `auth`; node-exporter in `node-exporter`;
@@ -171,7 +180,7 @@ no workloads. `ci` exists for two boundaries:
   2026-11-26, when the runners lost `dind`), like `auth`, `monitoring`
   (tracker #45) and `apps` (tracker #50). `node-exporter` is the only
   namespace where a privileged Pod can run.
-  `default` enforces `baseline` (`psa.tf`); `kube-system` stays
+  `default` enforces `baseline` (`platform/namespaces/`); `kube-system` stays
   unlabelled, k3s' own components need it.
 
 `monitoring` holds Grafana, Alertmanager, kube-state-metrics and Alloy:
