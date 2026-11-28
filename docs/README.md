@@ -117,33 +117,37 @@ The slots before that, and every bug found building both: `home-infra-docs`'
 
 ## Storage
 
-`storage.tf` holds the statically provisioned NFS PersistentVolumes. They
-live here because a PV is cluster-scoped: RBAC `resourceNames` only
+`platform/storage/persistent-volumes.yaml` holds the statically
+provisioned PersistentVolumes, synced by hand by the platform Argo CD since
+stage 5 of ADR 0037 (2026-11-28; until then `storage.tf`). Each carries
+`Prune=false,Delete=false`, so Argo CD never deletes one. A new PV is an
+entry in that file: merge, sync `platform-root`. They live in this repo
+because a PV is cluster-scoped: RBAC `resourceNames` only
 constrains verbs on existing objects, never `create`, so whoever deploys
-`k3s-apps` (now Argo CD's controller) could not be limited to "only these
-PVs" and could mount any host or NFS path. With them here, Argo CD has no
-`persistentvolumes` verb at all. The matching PVCs stay in `k3s-apps`
+`k3s-apps` (the apps Argo CD's controller) could not be limited to "only
+these PVs" and could mount any host or NFS path. With them here, the apps
+Argo CD has no `persistentvolumes` verb at all. The matching PVCs stay in `k3s-apps`
 and reference these PVs by name.
 
-- `storage_class_name = "local-path"` on both sides of every pair. An
-  explicit `""` is serialized like "not set" by the Kubernetes provider,
-  so k3s's DefaultStorageClass admission controller injects
-  `local-path` anyway; matching it is the working fix. Static binding
+- `storageClassName: local-path` on both sides of every pair. With
+  Terraform an explicit `""` was serialized like "not set", so k3s's
+  DefaultStorageClass admission controller injected `local-path` anyway;
+  matching it was the working fix, kept as is. Static binding
   wins, so the local-path provisioner is never invoked.
-- `reclaim_policy = "Retain"` everywhere: these PVs point at real,
+- `persistentVolumeReclaimPolicy: Retain` everywhere: these PVs point at real,
   existing data, and deleting a PVC must never touch the files.
 - Capacities are nominal: NFS has no Kubernetes-visible quota.
-- `sankey_export_state` is the one host-path PV: the CronJob's state
+- `sankey-export-state-pv` is the one host-path PV outside `/var/lib/k3s-apps-data`: the CronJob's state
   directory on `k3s-node-1`, pinned there by node affinity. Through a
   PV the Pod mounts a PVC, which PSA `baseline` allows, and the
   directory stays where it was.
-- `apps_host_path` are node-local volumes under `/var/lib/k3s-apps-data`
+- The `*-pv` volumes under `/var/lib/k3s-apps-data` are node-local
   on `k3s-node-1`, `Retain`, so deleting a claim never deletes data. Six
   were dynamic local-path claims (`reclaimPolicy: Delete`) until the move
   to `apps`: Blocky's and Paperless' Postgres, Paperless' data, Bulwark,
   Traefik's ACME store and Stalwart's mail. Nextcloud's code/config
   (`nextcloud-html`) and Postgres came later (ADR 0033).
-- Every PV here carries a `claim_ref` naming its claim's namespace: a
+- Every PV here carries a `claimRef` (namespace and name, no uid) naming its claim: a
   `Retain` PV released by a deleted claim only binds again to the claim
   its `claimRef` names.
 - `stalwart_backup` is the write target of `k3s-apps`' Stalwart backup

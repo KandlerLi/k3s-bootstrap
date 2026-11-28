@@ -6,4 +6,5 @@ resources:
   - namespaces
   - rbac
   - ci
+  - storage
   - apps
