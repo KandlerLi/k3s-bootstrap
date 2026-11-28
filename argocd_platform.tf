@@ -1,7 +1,16 @@
-# Platform Argo CD (ADR 0037): syncs this repo's platform/ cluster-wide, by hand only. See README, "Platform Argo CD".
+# Platform Argo CD (ADR 0037): syncs this repo's platform/ cluster-wide, by hand only; UI LAN-only. See README, "Platform Argo CD".
 
 locals {
   argocd_platform_repo = "https://github.com/KandlerLi/k3s-bootstrap.git"
+  argocd_platform_url  = "https://argo-platform.jkandler.de"
+
+  # Alertmanager's webhook schema, so home-infra's ntfy relay takes it as is. Only fields that never hold quotes, or the JSON breaks.
+  argocd_platform_notices = {
+    out-of-sync  = { alertname = "PlatformArgoOutOfSync", severity = "warning", summary = "{{.app.metadata.name}} is OutOfSync at {{.app.status.sync.revision}}; sync it by hand on argo-platform.jkandler.de" }
+    sync-running = { alertname = "PlatformArgoSyncStarted", severity = "warning", summary = "{{.app.metadata.name}}: sync started by {{.app.status.operationState.operation.initiatedBy.username}}" }
+    sync-done    = { alertname = "PlatformArgoSyncSucceeded", severity = "info", summary = "{{.app.metadata.name}}: sync succeeded at {{.app.status.sync.revision}}" }
+    sync-failed  = { alertname = "PlatformArgoSyncFailed", severity = "critical", summary = "{{.app.metadata.name}}: sync {{.app.status.operationState.phase}}; details on argo-platform.jkandler.de" }
+  }
 }
 
 resource "kubernetes_namespace_v1" "argocd_platform" {
@@ -29,25 +38,100 @@ resource "helm_release" "argocd_platform" {
     global = {
       image         = regex(local.image_parts, local.argocd_image)
       networkPolicy = { create = true }
+      hostAliases = [{
+        ip        = data.kubernetes_service_v1.ingress.spec[0].cluster_ip
+        hostnames = ["auth.jkandler.de"]
+      }]
     }
 
-    # Stage 0a: headless. No login of any kind, so nobody can sync yet; UI, OIDC and notifications come in stage 0b.
+    # Login only through Authelia's OIDC; the UI is LAN-only (k3s-apps' argo-platform route).
     dex            = { enabled = false }
-    notifications  = { enabled = false }
     applicationSet = { replicas = 0 }
 
     configs = {
       cm = {
+        url                       = local.argocd_platform_url
         "admin.enabled"           = false
         "exec.enabled"            = false
         "users.anonymous.enabled" = false
         # Keeps its resource tracking apart from the apps instance's.
         installationID = "platform"
+        "oidc.config" = yamlencode({
+          name         = "Authelia"
+          issuer       = "https://auth.jkandler.de"
+          clientID     = "argocd-platform"
+          clientSecret = "$oidc.authelia.clientSecret"
+          # Server-side PKCE (S256), which Authelia requires of every client here.
+          enablePKCEAuthentication = true
+          requestedScopes          = ["openid", "profile", "email", "groups"]
+        })
       }
+      # Traefik terminates TLS.
       params = { "server.insecure" = true }
+      # Authelia already admits only julian; admins is a second gate.
       rbac = {
         "policy.default" = ""
-        "policy.csv"     = ""
+        "policy.csv"     = "g, admins, role:admin"
+        scopes           = "[groups]"
+      }
+    }
+
+    # OutOfSync and every sync go to Julian's phone (ADR 0037, Decision 5).
+    notifications = {
+      enabled   = true
+      argocdUrl = local.argocd_platform_url
+      notifiers = {
+        "service.webhook.ntfy-relay" = yamlencode({
+          url     = "http://192.168.101.1:9096/webhook"
+          headers = [{ name = "Content-Type", value = "application/json" }]
+        })
+      }
+      templates = {
+        for k, n in local.argocd_platform_notices : "template.platform-${k}" => yamlencode({
+          webhook = {
+            ntfy-relay = {
+              method = "POST"
+              body = jsonencode({
+                status = "firing"
+                alerts = [{
+                  status      = "firing"
+                  labels      = { alertname = n.alertname, severity = n.severity }
+                  annotations = { summary = n.summary }
+                }]
+              })
+            }
+          }
+        })
+      }
+      triggers = {
+        "trigger.on-out-of-sync" = yamlencode([{
+          when    = "app.status.sync.status == 'OutOfSync'"
+          oncePer = "app.status.sync.revision"
+          send    = ["platform-out-of-sync"]
+        }])
+        "trigger.on-sync-running" = yamlencode([{
+          when    = "app.status.operationState.phase in ['Running']"
+          oncePer = "app.status.operationState.startedAt"
+          send    = ["platform-sync-running"]
+        }])
+        "trigger.on-sync-succeeded" = yamlencode([{
+          when    = "app.status.operationState.phase in ['Succeeded']"
+          oncePer = "app.status.operationState.startedAt"
+          send    = ["platform-sync-done"]
+        }])
+        "trigger.on-sync-failed" = yamlencode([{
+          when    = "app.status.operationState.phase in ['Error', 'Failed']"
+          oncePer = "app.status.operationState.startedAt"
+          send    = ["platform-sync-failed"]
+        }])
+      }
+      subscriptions = [{
+        recipients = ["ntfy-relay"]
+        triggers   = ["on-out-of-sync", "on-sync-running", "on-sync-succeeded", "on-sync-failed"]
+      }]
+      resources = {
+        requests = { cpu = "10m", memory = "32Mi" }
+        limits   = { memory = "128Mi" }
       }
     }
 
@@ -84,6 +168,11 @@ resource "helm_release" "argocd_platform" {
       }
     }
   })]
+
+  set_sensitive = [{
+    name  = "configs.secret.extra.oidc\\.authelia\\.clientSecret"
+    value = local.home_infra_argocd["authelia_oidc_argocd_platform_client_secret"]
+  }]
 }
 
 resource "helm_release" "argocd_platform_apps" {

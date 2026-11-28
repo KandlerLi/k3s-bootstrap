@@ -289,10 +289,25 @@ in home-infra-docs). It is meant to take over this repo's cluster-wide layer
 stage by stage, from manifests under `platform/`. Its own install stays
 here, applied locally (stage 0).
 
-- **Stage 0a (now): headless.** Admin login, Dex, exec and anonymous
-  access are off, and there is no route or OIDC client yet, so nobody can
-  log in or sync. The root Application `platform-root` points at
-  `platform/`, which holds an empty `kustomization.yaml`.
+- **Login (stage 0b):** only through Authelia's OIDC (client
+  `argocd-platform`, PKCE S256, `julian_only`), `role:admin` for the
+  `admins` group. Admin login, Dex, exec and anonymous access stay off.
+  The client secret's plaintext half is `home-infra/argocd`'s
+  `authelia_oidc_argocd_platform_client_secret`, the hash is in
+  `home-infra/authelia`, and it rotates with k3s-apps'
+  `rotate-oidc-client-secret.sh argocd-platform`.
+- **UI only from the LAN:** `argo-platform.jkandler.de` has no public DNS
+  record (Blocky maps it to the homeserver). k3s-apps' route
+  `argo-platform` admits only `192.168.178.0/24`, ahead of Authelia
+  forward-auth with two-factor.
+- **Notifications:** OutOfSync (once per revision) and every sync
+  started, succeeded or failed go to home-infra's ntfy relay
+  (`192.168.101.1:9096`) as Alertmanager-shaped webhooks, so they arrive
+  as push like the alerts. The templates only use fields that never hold
+  quotes, or the JSON would break.
+- **Root:** the root Application `platform-root` points at `platform/`,
+  which holds an empty `kustomization.yaml` until the migration stages
+  fill it.
 - **Cluster-wide:** `createClusterRoles = true`, unlike the apps instance.
   Its AppProject `platform` allows only this repo and every kind.
 - **Sync by hand only:** no `syncPolicy.automated` and no prune, on any
@@ -305,8 +320,6 @@ here, applied locally (stage 0).
   its own namespace.
 - **Without the UI:** `k3s-tunnel`, then
   `KUBECONFIG=~/.kube/k3s-node-1.yaml argocd admin dashboard -n argocd-platform`.
-- **Stage 0b:** UI with no public DNS record, LAN-only allowlist,
-  Authelia forward-auth and OIDC; notifications on OutOfSync and every sync.
 
 ## External Secrets
 
