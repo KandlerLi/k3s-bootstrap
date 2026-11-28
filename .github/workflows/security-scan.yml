@@ -13,7 +13,7 @@ on:
 
 jobs:
   trivy-config:
-    uses: KandlerLi/gha-common/.github/workflows/trivy-config.yml@d1e5aca310554c3e36003c95ec5263a02fed43f0 # TEMP: gha-common report-in-log, v2.1.1 after release
+    uses: KandlerLi/gha-common/.github/workflows/trivy-config.yml@v2.1.1
     with:
       runs_on: '["ubuntu-latest"]'
       trivyignores: .trivyignore.yaml
