@@ -1,8 +1,8 @@
 # Argo CD: syncs k3s-apps' argocd/<app> into apps, auth and monitoring; UI on argo.jkandler.de behind Authelia. See README, "Argo CD".
 
 locals {
-  argocd_image       = "quay.io/argoproj/argocd:v3.6.2@sha256:bbcc3b6e79c5963439bdc5170f6e20a52365b41878133fac5ce8d6810d2641dc"
-  argocd_redis_image = "ecr-public.aws.com/docker/library/redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3"
+  argocd_image       = "quay.io/argoproj/argocd:v3.6.3@sha256:f2e45010dbd6aeff01b845d212b436b2d8e7f44d90d437274906c2ab21e59e0d"
+  argocd_redis_image = "ecr-public.aws.com/docker/library/redis:8.12.0-alpine@sha256:5af80107c1eeecb484a2269b80a26d12bfa6521787da4663bd9f19f60a163483"
 
   # Splits name:tag@digest into the chart's {repository, tag}.
   image_parts = "^(?P<repository>[^:]+):(?P<tag>.+)$"
@@ -60,7 +60,7 @@ resource "helm_release" "argocd" {
   namespace  = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
-  version    = "10.18.2"
+  version    = "10.20.0"
 
   values = [yamlencode({
     # No ClusterRoles: the controller reaches apps only through argocd_apps below.
@@ -182,7 +182,7 @@ resource "helm_release" "argocd_apps" {
   namespace  = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argocd-apps"
-  version    = "2.0.8"
+  version    = "2.0.10"
 
   depends_on = [helm_release.argocd]
 
