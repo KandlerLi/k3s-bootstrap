@@ -1,0 +1,5 @@
+apiVersion: v2
+name: argocd-apps-rbac
+description: The apps Argo CD's Roles in apps, auth and monitoring (ADR 0037, stage 2)
+type: application
+version: 1.0.0

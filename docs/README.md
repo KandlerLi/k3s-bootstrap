@@ -217,11 +217,13 @@ locally, while `k3s-apps` only references them by name in Pod specs.
   to wait until Stalwart has stopped (RBAC can't narrow `list` to a
   label). RocksDB is only consistent on disk while Stalwart is down, so
   k3s-apps' nightly backup CronJob scales it to 0 and back.
-- **Argo CD** (`argocd.tf`): no ClusterRoles at all. In `apps`, `auth`
+- **Argo CD** (Roles: chart `platform/rbac/argocd-apps/`, synced by the
+  platform Argo CD's child Application `argocd-apps-rbac` since stage 2 of
+  ADR 0037): no ClusterRoles at all. In `apps`, `auth`
   and `monitoring` its application controller may read every kind it deploys
   anywhere (its cache lists each kind in each namespace), create the
   kinds it deploys in that namespace, but update, patch or delete only the
-  objects named in `local.argocd_objects` (PVCs: never delete); its
+  objects named in the chart's `values.yaml` (PVCs: never delete); its
   server may only read them, plus list each namespace's Events for the UI. See
   "Argo CD".
 - **kube-state-metrics** (`kube_state_metrics_rbac.tf`): `view` plus read
@@ -265,13 +267,14 @@ release because Helm can't map an Application before its CRD exists.
 - **Scope:** the in-cluster cluster Secret restricts Argo CD to `apps`,
   `auth` and `monitoring` (`local.argocd_namespaces`) and no cluster-scoped
   resources; `resource.inclusions` and the AppProject both allow only
-  the kinds in `local.argocd_objects` (ConfigMap, Service,
+  the kinds in `platform/rbac/argocd-apps/values.yaml` (ConfigMap, Service,
   Deployment, CronJob, NetworkPolicy, ExternalSecret, PersistentVolumeClaim).
   The controller's Role allows changing only the named objects, the
   server's is read-only (see "RBAC"), so even an admin session in the UI
   reaches no further. A new app adds its directory to
-  `local.argocd_applications` and its object names to
-  `local.argocd_objects`; an Application whose directory isn't on
+  `local.argocd_applications` (local apply) and its object names to the
+  chart's `values.yaml` (merge, then sync `argocd-apps-rbac` by hand);
+  `argocd.tf` reads the kinds from that file. An Application whose directory isn't on
   k3s-apps' `main` yet only shows a path error and syncs nothing.
 - **Argo CD never touches Secrets:** it has no rule on them at all. An
   app's Secrets come either from k3s-apps' Terraform or, once moved, from

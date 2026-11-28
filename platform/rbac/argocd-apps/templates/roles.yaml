@@ -1,0 +1,76 @@
+{{- /* Per namespace: the controller may read every kind, create the kinds it deploys there, and change only named objects; the server only reads. */ -}}
+{{- $groups := list -}}
+{{- $resources := list -}}
+{{- range $ns, $objs := .Values.objects -}}
+{{- range $res, $o := $objs -}}
+{{- $groups = append $groups $o.apiGroup -}}
+{{- $resources = append $resources $res -}}
+{{- end -}}
+{{- end -}}
+{{- /* Its cache lists every kind in every namespace it manages, so reading must cover them all everywhere. */ -}}
+{{- $read := dict "apiGroups" ($groups | uniq | sortAlpha) "resources" ($resources | uniq | sortAlpha) "verbs" (list "get" "list" "watch") -}}
+{{- range $ns, $objs := .Values.objects }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-application-controller
+  namespace: {{ $ns }}
+rules:
+  - {{- toYaml $read | nindent 4 }}
+{{- /* create can't be limited by name; changing or deleting anything else in the namespace stays forbidden. */}}
+{{- range $res, $o := $objs }}
+{{- if $o.create }}
+  - apiGroups: [{{ $o.apiGroup | quote }}]
+    resources: [{{ $res }}]
+    verbs: [create]
+{{- end }}
+{{- end }}
+{{- range $res, $o := $objs }}
+  - apiGroups: [{{ $o.apiGroup | quote }}]
+    resourceNames: {{ $o.names | sortAlpha | toJson }}
+    resources: [{{ $res }}]
+    verbs: {{ ternary (list "delete" "patch" "update") (list "patch" "update") $o.delete | toJson }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-application-controller
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-application-controller
+subjects:
+  - kind: ServiceAccount
+    name: argocd-application-controller
+    namespace: {{ $.Values.controllerNamespace }}
+---
+{{- /* The UI shows live objects through the server's own ServiceAccount; read-only, syncs run in the controller. */}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-server
+  namespace: {{ $ns }}
+rules:
+  - {{- toYaml $read | nindent 4 }}
+  # The UI's Events tab per resource.
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-server
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-server
+subjects:
+  - kind: ServiceAccount
+    name: argocd-server
+    namespace: {{ $.Values.controllerNamespace }}
+{{- end }}

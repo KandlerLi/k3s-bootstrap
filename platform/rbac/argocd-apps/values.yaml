@@ -1,0 +1,106 @@
+# Everything the apps Argo CD (namespace argocd, k3s-apps) may write, per namespace and by name; PVCs hold data, so it never
+# deletes one. Rendered into its Roles by templates/roles.yaml; argocd.tf reads the kinds from here for the apps instance's
+# resource.inclusions and AppProject. See README, "RBAC".
+controllerNamespace: argocd
+objects:
+  apps:
+    configmaps:
+      apiGroup: ''
+      create: true
+      delete: true
+      kind: ConfigMap
+      names: [landing-page-html, ingress-static-config, ingress-dynamic-config, nextcloud-hooks, minecraft-geyser-patches]
+    cronjobs:
+      apiGroup: batch
+      create: true
+      delete: true
+      kind: CronJob
+      names: [sankey-export, vaultwarden-backup, paperless-export, stalwart-backup, nextcloud-backup]
+    deployments:
+      apiGroup: apps
+      create: true
+      delete: true
+      kind: Deployment
+      names: [landing-page, headlamp, bulwark, vaultwarden, paperless, stalwart, ingress, blocky, nextcloud, eurooffice, minecraft]
+    externalsecrets:
+      apiGroup: external-secrets.io
+      create: true
+      delete: true
+      kind: ExternalSecret
+      names: [bulwark-session, bulwark-oidc, sankey-export-app-password, sankey-export-ghcr-pull-secret, vaultwarden-sso, paperless-postgres, paperless-env, ingress-acme-dns01-credentials, stalwart-ses-smtp,
+        blocky-config, blocky-postgres-credentials, blocky-postgres-exporter-dsn, nextcloud-env, nextcloud-postgres, eurooffice-env]
+    networkpolicies:
+      apiGroup: networking.k8s.io
+      create: true
+      delete: true
+      kind: NetworkPolicy
+      names: [vaultwarden, nextcloud, eurooffice, minecraft]
+    persistentvolumeclaims:
+      apiGroup: ''
+      create: true
+      delete: false
+      kind: PersistentVolumeClaim
+      names: [blocky-postgres, bulwark, ingress-acme, paperless-data, paperless-postgres, paperless-media, paperless-export, sankey-export-state, stalwart, stalwart-backup, vaultwarden-data, vaultwarden-backup,
+        nextcloud-html, nextcloud-postgres, nextcloud-backup, nextcloud-files, minecraft-world, minecraft-backup]
+    services:
+      apiGroup: ''
+      create: true
+      delete: true
+      kind: Service
+      names: [landing-page-svc, headlamp, bulwark-svc, vaultwarden-svc, paperless-svc, stalwart-smtp, stalwart-internal, ingress-svc, blocky-svc, nextcloud-svc, eurooffice-svc, minecraft-svc]
+  auth:
+    cronjobs:
+      apiGroup: batch
+      create: true
+      delete: true
+      kind: CronJob
+      names: [authelia-backup]
+    deployments:
+      apiGroup: apps
+      create: true
+      delete: true
+      kind: Deployment
+      names: [authelia]
+    externalsecrets:
+      apiGroup: external-secrets.io
+      create: true
+      delete: true
+      kind: ExternalSecret
+      names: [authelia-config, authelia-users]
+    persistentvolumeclaims:
+      apiGroup: ''
+      create: true
+      delete: false
+      kind: PersistentVolumeClaim
+      names: [authelia-data, authelia-redis, authelia-backup]
+    services:
+      apiGroup: ''
+      create: true
+      delete: true
+      kind: Service
+      names: [authelia-svc]
+  monitoring:
+    configmaps:
+      apiGroup: ''
+      create: true
+      delete: true
+      kind: ConfigMap
+      names: [alloy-config, grafana-dashboard-provider, grafana-dashboards]
+    deployments:
+      apiGroup: apps
+      create: true
+      delete: true
+      kind: Deployment
+      names: [alertmanager, alloy, grafana, kube-state-metrics]
+    externalsecrets:
+      apiGroup: external-secrets.io
+      create: true
+      delete: true
+      kind: ExternalSecret
+      names: [grafana-admin-password, grafana-oidc-client-secret, grafana-datasources, alertmanager-config]
+    services:
+      apiGroup: ''
+      create: true
+      delete: true
+      kind: Service
+      names: [alertmanager-svc, grafana-svc, kube-state-metrics-svc]

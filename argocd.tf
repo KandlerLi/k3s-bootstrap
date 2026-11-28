@@ -37,42 +37,14 @@ locals {
     monitoring = "monitoring"
   }
 
-  # Everything Argo CD may write, per namespace and by name; PVCs hold data, so Argo CD never deletes one.
-  argocd_objects = {
-    apps = {
-      configmaps             = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["landing-page-html", "ingress-static-config", "ingress-dynamic-config", "nextcloud-hooks", "minecraft-geyser-patches"] }
-      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["landing-page-svc", "headlamp", "bulwark-svc", "vaultwarden-svc", "paperless-svc", "stalwart-smtp", "stalwart-internal", "ingress-svc", "blocky-svc", "nextcloud-svc", "eurooffice-svc", "minecraft-svc"] }
-      deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["landing-page", "headlamp", "bulwark", "vaultwarden", "paperless", "stalwart", "ingress", "blocky", "nextcloud", "eurooffice", "minecraft"] }
-      cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["sankey-export", "vaultwarden-backup", "paperless-export", "stalwart-backup", "nextcloud-backup"] }
-      networkpolicies        = { api_group = "networking.k8s.io", kind = "NetworkPolicy", create = true, delete = true, names = ["vaultwarden", "nextcloud", "eurooffice", "minecraft"] }
-      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["bulwark-session", "bulwark-oidc", "sankey-export-app-password", "sankey-export-ghcr-pull-secret", "vaultwarden-sso", "paperless-postgres", "paperless-env", "ingress-acme-dns01-credentials", "stalwart-ses-smtp", "blocky-config", "blocky-postgres-credentials", "blocky-postgres-exporter-dsn", "nextcloud-env", "nextcloud-postgres", "eurooffice-env"] }
-      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["blocky-postgres", "bulwark", "ingress-acme", "paperless-data", "paperless-postgres", "paperless-media", "paperless-export", "sankey-export-state", "stalwart", "stalwart-backup", "vaultwarden-data", "vaultwarden-backup", "nextcloud-html", "nextcloud-postgres", "nextcloud-backup", "nextcloud-files", "minecraft-world", "minecraft-backup"] }
-    }
-    auth = {
-      services               = { api_group = "", kind = "Service", create = true, delete = true, names = ["authelia-svc"] }
-      externalsecrets        = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["authelia-config", "authelia-users"] }
-      deployments            = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["authelia"] }
-      cronjobs               = { api_group = "batch", kind = "CronJob", create = true, delete = true, names = ["authelia-backup"] }
-      persistentvolumeclaims = { api_group = "", kind = "PersistentVolumeClaim", create = true, delete = false, names = ["authelia-data", "authelia-redis", "authelia-backup"] }
-    }
-    monitoring = {
-      configmaps      = { api_group = "", kind = "ConfigMap", create = true, delete = true, names = ["alloy-config", "grafana-dashboard-provider", "grafana-dashboards"] }
-      externalsecrets = { api_group = "external-secrets.io", kind = "ExternalSecret", create = true, delete = true, names = ["grafana-admin-password", "grafana-oidc-client-secret", "grafana-datasources", "alertmanager-config"] }
-      services        = { api_group = "", kind = "Service", create = true, delete = true, names = ["alertmanager-svc", "grafana-svc", "kube-state-metrics-svc"] }
-      deployments     = { api_group = "apps", kind = "Deployment", create = true, delete = true, names = ["alertmanager", "alloy", "grafana", "kube-state-metrics"] }
-    }
-  }
+  # Everything Argo CD may write, per namespace and by name: the platform Argo CD's chart renders the Roles from it (ADR 0037, stage 2).
+  argocd_objects = yamldecode(file("${path.module}/platform/rbac/argocd-apps/values.yaml")).objects
 
   # Every kind Argo CD handles in any namespace.
   argocd_kinds = distinct(flatten([
-    for objects in values(local.argocd_objects) : [for o in values(objects) : { api_group = o.api_group, kind = o.kind }]
+    for objects in values(local.argocd_objects) : [for o in values(objects) : { api_group = o.apiGroup, kind = o.kind }]
   ]))
 
-  # Argo CD's cache lists every kind above in every namespace it manages, so reading must cover them all everywhere.
-  argocd_read = {
-    api_groups = distinct([for k in local.argocd_kinds : k.api_group])
-    resources  = distinct(flatten([for objects in values(local.argocd_objects) : keys(objects)]))
-  }
 }
 
 # Traefik's ClusterIP: Argo CD reaches Authelia in-cluster instead of hairpinning through the router.
@@ -230,119 +202,31 @@ resource "helm_release" "argocd_apps" {
   })]
 }
 
-moved {
-  from = kubernetes_role_v1.argocd_apps
-  to   = kubernetes_role_v1.argocd_controller["apps"]
-}
-
-moved {
-  from = kubernetes_role_binding_v1.argocd_apps
-  to   = kubernetes_role_binding_v1.argocd_controller["apps"]
-}
-
-moved {
-  from = kubernetes_role_v1.argocd_server_apps
-  to   = kubernetes_role_v1.argocd_server["apps"]
-}
-
-moved {
-  from = kubernetes_role_binding_v1.argocd_server_apps
-  to   = kubernetes_role_binding_v1.argocd_server["apps"]
-}
-
-resource "kubernetes_role_v1" "argocd_controller" {
-  for_each = local.argocd_objects
-
-  metadata {
-    name      = "argocd-application-controller"
-    namespace = local.argocd_namespaces[each.key]
-  }
-
-  rule {
-    api_groups = local.argocd_read.api_groups
-    resources  = local.argocd_read.resources
-    verbs      = ["get", "list", "watch"]
-  }
-  # create can't be limited by name; changing or deleting anything else in the namespace stays forbidden.
-  dynamic "rule" {
-    for_each = { for k, o in each.value : k => o if o.create }
-    content {
-      api_groups = [rule.value.api_group]
-      resources  = [rule.key]
-      verbs      = ["create"]
-    }
-  }
-  dynamic "rule" {
-    for_each = each.value
-    content {
-      api_groups     = [rule.value.api_group]
-      resources      = [rule.key]
-      resource_names = rule.value.names
-      verbs          = rule.value.delete ? ["update", "patch", "delete"] : ["update", "patch"]
-    }
+# Its Roles moved to platform/rbac/argocd-apps/, synced by the platform Argo CD (ADR 0037, stage 2).
+removed {
+  from = kubernetes_role_v1.argocd_controller
+  lifecycle {
+    destroy = false
   }
 }
 
-resource "kubernetes_role_binding_v1" "argocd_controller" {
-  for_each = local.argocd_objects
-
-  metadata {
-    name      = "argocd-application-controller"
-    namespace = local.argocd_namespaces[each.key]
-  }
-
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "Role"
-    name      = kubernetes_role_v1.argocd_controller[each.key].metadata[0].name
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = "argocd-application-controller"
-    namespace = "argocd"
+removed {
+  from = kubernetes_role_binding_v1.argocd_controller
+  lifecycle {
+    destroy = false
   }
 }
 
-# The UI shows live objects through the server's own ServiceAccount; read-only, syncs run in the controller.
-resource "kubernetes_role_v1" "argocd_server" {
-  for_each = local.argocd_objects
-
-  metadata {
-    name      = "argocd-server"
-    namespace = local.argocd_namespaces[each.key]
-  }
-
-  rule {
-    api_groups = local.argocd_read.api_groups
-    resources  = local.argocd_read.resources
-    verbs      = ["get", "list", "watch"]
-  }
-  # The UI's Events tab per resource.
-  rule {
-    api_groups = [""]
-    resources  = ["events"]
-    verbs      = ["list"]
+removed {
+  from = kubernetes_role_v1.argocd_server
+  lifecycle {
+    destroy = false
   }
 }
 
-resource "kubernetes_role_binding_v1" "argocd_server" {
-  for_each = local.argocd_objects
-
-  metadata {
-    name      = "argocd-server"
-    namespace = local.argocd_namespaces[each.key]
-  }
-
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "Role"
-    name      = kubernetes_role_v1.argocd_server[each.key].metadata[0].name
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = "argocd-server"
-    namespace = "argocd"
+removed {
+  from = kubernetes_role_binding_v1.argocd_server
+  lifecycle {
+    destroy = false
   }
 }
