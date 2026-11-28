@@ -343,7 +343,7 @@ here, applied locally (stage 0).
 
 ## External Secrets
 
-`eso.tf` installs the External Secrets Operator (ESO) and Reloader for
+`eso.tf` installs the External Secrets Operator (ESO), and the platform Argo CD runs Reloader, for
 [ADR 0032](https://github.com/KandlerLi/home-infra-docs/blob/main/docs/adr/0032-cluster-secrets-through-external-secrets.md):
 Kubernetes Secrets come from AWS Secrets Manager instead of a Terraform apply.
 
@@ -366,6 +366,11 @@ Kubernetes Secrets come from AWS Secrets Manager instead of a Terraform apply.
   `secret.reloader.stakater.com/reload: <secret>` when that Secret changes,
   via a pod-template annotation (`reloadStrategy: annotations`), which Argo
   CD leaves alone. It watches Secrets only, not ConfigMaps, Jobs or CronJobs.
+  Since stage 3a of ADR 0037 it is three Applications of the platform Argo CD
+  (`reloader-apps`, `-auth`, `-monitoring`, from `platform/apps/reloader/`:
+  one base with the chart version and values, an overlay per namespace),
+  synced by hand. A version bump is one edit in the base, then three syncs
+  (the Applications list can sync several at once).
 
 ## State
 
