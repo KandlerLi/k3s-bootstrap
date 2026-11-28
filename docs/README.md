@@ -202,9 +202,10 @@ Granting RBAC is itself privilege-defining: whoever could create
 ServiceAccounts or (Cluster)RoleBindings could grant itself anything up
 to cluster-admin. So every ServiceAccount and binding lives here, while
 `k3s-apps` only references them by name in Pod specs. Since stage 2 of ADR
-0037 (2026-11-28) the ones below, except Argo CD's, are manifests in
-`platform/rbac/`, synced by hand by the platform Argo CD; Terraform dropped
-them with `removed { destroy = false }`.
+0037 (2026-11-28) all of the ones below are manifests in `platform/rbac/`
+(Argo CD's Roles as the chart `platform/rbac/argocd-apps/`), synced by hand
+by the platform Argo CD; Terraform dropped them with `removed { destroy =
+false }`.
 `k3s-apps`' former CI ServiceAccount `k3s-apps-ci` and its Roles went on
 2026-11-15 with its Terraform.
 
