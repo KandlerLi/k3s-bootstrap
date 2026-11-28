@@ -1,0 +1,442 @@
+# Statically provisioned PVs, Retain everywhere: they point at real data (NFS on the homeserver's black and red HDDs,
+# host paths on k3s-node-1/-3). Each claimRef names its claim, so a released PV only binds back to it. Never pruned or
+# deleted by Argo CD (annotation per object). Generated 2026-11-28 from the live objects; see README, "Storage".
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: authelia-backup-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/red-hdd/authelia-backup
+    server: 192.168.101.1
+  claimRef:
+    namespace: auth
+    name: authelia-backup
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: blocky-postgres-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 256Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/blocky-postgres
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: blocky-postgres
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: bulwark-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/bulwark
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: bulwark
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ingress-acme-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/ingress-acme
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: ingress-acme
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minecraft-backup-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/red-hdd/minecraft-backup
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: minecraft-backup
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minecraft-world-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/minecraft
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-3
+  claimRef:
+    namespace: apps
+    name: minecraft-world
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nextcloud-backup-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/red-hdd/nextcloud-backup
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: nextcloud-backup
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nextcloud-files-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/black-hdd/nextcloud
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: nextcloud-files
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nextcloud-html-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/nextcloud-html
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: nextcloud-html
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nextcloud-postgres-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/nextcloud-postgres
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: nextcloud-postgres
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: paperless-data-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/paperless-data
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: paperless-data
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: paperless-export-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/red-hdd/paperless-export
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: paperless-export
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: paperless-media-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/black-hdd/paperless-media
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: paperless-media
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: paperless-postgres-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/paperless-postgres
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: paperless-postgres
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: sankey-export-state-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-sankey-export
+    type: Directory
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: sankey-export-state
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: stalwart-backup-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/red-hdd/stalwart-backup
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: stalwart-backup
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: stalwart-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /var/lib/k3s-apps-data/stalwart
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-node-1
+  claimRef:
+    namespace: apps
+    name: stalwart
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vaultwarden-backup-pv
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  nfs:
+    path: /mnt/red-hdd/vaultwarden-backup
+    server: 192.168.101.1
+  claimRef:
+    namespace: apps
+    name: vaultwarden-backup
