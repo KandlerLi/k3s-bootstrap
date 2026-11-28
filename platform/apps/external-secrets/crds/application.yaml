@@ -1,0 +1,39 @@
+# ESO's CRDs (namespaced kinds only) in their own Application, so removing one controller never deletes every ExternalSecret.
+# Server-side apply: the CRDs are too large for the last-applied annotation of a client-side apply.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets-crds
+  namespace: argocd-platform
+spec:
+  project: platform
+  source:
+    repoURL: https://charts.external-secrets.io
+    chart: external-secrets
+    targetRevision: 2.15.0
+    helm:
+      releaseName: external-secrets-crds
+      valuesObject:
+        installCRDs: true
+        # Only the namespaced kinds: no instance processes cluster-scoped ones.
+        crds:
+          createClusterExternalSecret: false
+          createClusterSecretStore: false
+          createClusterGenerator: false
+          createClusterPushSecret: false
+          createPushSecret: false
+        createOperator: false
+        webhook:
+          create: false
+        certController:
+          create: false
+        serviceAccount:
+          create: false
+        rbac:
+          create: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true

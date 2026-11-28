@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+nameSuffix: -auth
+patches:
+  - target:
+      kind: Application
+    patch: |-
+      - op: replace
+        path: /spec/destination/namespace
+        value: auth
+      - op: replace
+        path: /spec/source/helm/valuesObject/scopedNamespace
+        value: auth
+      - op: replace
+        path: /spec/source/helm/valuesObject/extraObjects/0/metadata/namespace
+        value: auth
