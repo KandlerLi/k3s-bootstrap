@@ -1,0 +1,8 @@
+# A harmless object, so platform-root is never empty: the UI's sync panel needs at least one resource, and a change here tests the merge → OutOfSync → sync → notification path.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-canary
+  namespace: argocd-platform
+data:
+  purpose: "Test object for the platform Argo CD (ADR 0037); safe to change, syncs by hand."
